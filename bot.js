@@ -29,7 +29,3 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(3000);
   await browser.close();
 })();
-
-  await page.waitForTimeout(2000);
-  await browser.close();
-})();
