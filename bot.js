@@ -19,15 +19,17 @@ const { chromium } = require('playwright');
   await passInput.press('Enter');
   await page.waitForTimeout(5000);
 
-  // 3. 画面に見えている1番目の入力欄（名前欄）に直接入力！
-  const nameInput = page.locator('input[type="text"]:visible').first();
-  await nameInput.fill('huyubot test');
+  // 3. 今見えている画面の「文字」と「入力欄の正体」を全部表示する！
+  console.log('=== 画面のテキスト一部 ===');
+  console.log((await page.locator('body').innerText()).slice(0, 300));
 
-  // 4. 画面に見えている発言欄（textarea）に直接入力してEnterで投稿！
-  const chatInput = page.locator('textarea:visible').first();
-  await chatInput.fill('GitHubボットのテスト発言です！');
-  await chatInput.press('Enter');
+  console.log('=== 入力欄のリスト ===');
+  const inputs = await page.locator('input, textarea, [contenteditable="true"]').all();
+  for (let i = 0; i < inputs.length; i++) {
+    const tag = await inputs[i].evaluate(el => el.outerHTML);
+    console.log(i + ':', tag);
+  }
 
-  await page.waitForTimeout(3000);
+  console.log('=== iframeの数 ===', page.frames().length);
   await browser.close();
 })();
