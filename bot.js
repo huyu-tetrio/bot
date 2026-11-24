@@ -23,7 +23,7 @@ chromium.use(stealth);
 
     // 2. 画面上の「見えている(visible)」パスワード欄だけを狙って入力！
   const passInput = page.locator('input[type="password"]:visible').first();
-  await passInput.fill('HuyuTetris2026');
+  await passInput.fill('HuyuTetr1s2o26');
   await page.waitForTimeout(500);
 
   // パスワード欄と同じフォーム内にある「ログイン」ボタンを確実にクリック！
