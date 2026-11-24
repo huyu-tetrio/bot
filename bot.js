@@ -31,12 +31,20 @@ chromium.use(stealth);
   await nameInput.press('Enter');
   await page.waitForTimeout(10000);
 
-  // 4. 初回用の発言欄「発言内容を入力（Enterで投稿）」を直接クリックしてタイプ！
-  const chatInput = page.getByPlaceholder('発言内容を入力（Enterで投稿）');
-  await chatInput.click();
-  await page.keyboard.type('0円ステルス突破テスト成功！！', { delay: 50 });
+  // 4. 初回チュートリアルを消してから発言する！
+  // 画面上のどこかを強制クリックするか、Escapeキーでチュートリアル(introjs)を閉じる
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(1000);
+
+  // 実際のプレースホルダー名「発言内容を入力 (Shift + Enterで投稿)」で取得
+  const chatInput = page.getByPlaceholder('発言内容を入力 (Shift + Enterで投稿)');
+  
+  // もしオーバーレイが残っていても強制的にフォーカスを当てて入力する
+  await chatInput.fill('0円ステルス突破成功！！');
   await page.waitForTimeout(500);
-  await page.keyboard.press('Enter');
+
+  // Shift + Enter で投稿！（確実に送るため「投稿」ボタンをクリックする形でもOK）
+  await chatInput.press('Shift+Enter');
 
   await page.waitForTimeout(3000);
   await browser.close();
