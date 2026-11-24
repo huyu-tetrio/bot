@@ -12,4 +12,8 @@ jobs:
           node-version: '20'
       - run: npm install playwright playwright-extra puppeteer-extra-plugin-stealth
       - run: npx playwright install chromium
-      - run: node bot.js
+      - name: Run bot
+        env:
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+          BOT_PASS: ${{ secrets.BOT_PASS }}
+        run: node bot.js
