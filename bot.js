@@ -16,25 +16,46 @@ chromium.use(stealth);
 
   const page = await context.newPage();
 
-  // 1. 部屋にアクセス
+  // 0. 正しいログインURL「www.x-feeder.info/account/login.php」でHuyuBotアカウントにログイン
+  if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
+    console.log('HuyuBotアカウントでログインを試みます...');
+    await page.goto('https://x-feeder.info', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(4000);
+
+    const emailInput = page.locator('input[type="text"]:visible, input[type="email"]:visible').first();
+    const accPassInput = page.locator('input[type="password"]:visible').first();
+    if (await emailInput.isVisible() && await accPassInput.isVisible()) {
+      await emailInput.fill(process.env.BOT_EMAIL);
+      await accPassInput.fill(process.env.BOT_PASS);
+      await page.waitForTimeout(500);
+      const accForm = accPassInput.locator('xpath=ancestor::form');
+      await accForm.locator('input[type="submit"], button').first().click();
+      await page.waitForTimeout(5000);
+      console.log('ログイン処理完了！現在のURL:', page.url());
+    }
+  }
+
+  // 1. 部屋にアクセス（部屋サーバーは www1 のまま！）
   const roomUrl = 'https://' + 'www1.x-feeder.info/' + 'huyu_praviteroom/';
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(5000);
 
-  // 2. パスワードを入れてログイン
-  const passInput = page.locator('input[type="password"]:visible').first();
-  await passInput.fill('HuyuTetr1s2o26');
-  await page.waitForTimeout(500);
-  const loginForm = passInput.locator('xpath=ancestor::form');
-  await loginForm.locator('input[type="submit"], button').first().click();
-  await page.waitForTimeout(6000);
+  // 2. 部屋のパスワード（HuyuTetr1s2o26）を入れて入室
+  const roomPassInput = page.locator('input[type="password"]:visible').first();
+  if (await roomPassInput.isVisible()) {
+    await roomPassInput.fill('HuyuTetr1s2o26');
+    await page.waitForTimeout(500);
+    const loginForm = roomPassInput.locator('xpath=ancestor::form');
+    await loginForm.locator('input[type="submit"], button').first().click();
+    await page.waitForTimeout(6000);
+  }
 
-  // 3. 「名前を入力」にボット名を入れてEnter
+  // 3. もし未ログイン（ゲスト状態）になった場合だけ「名前を入力」を入れる
   const nameInput = page.getByPlaceholder('名前を入力');
   if (await nameInput.isVisible()) {
     await nameInput.fill('huyubot test');
     await nameInput.press('Enter');
-    await page.waitForTimeout(10000);
+    await page.waitForTimeout(8000);
   }
 
   // 4. 初回チュートリアルを消して最初の挨拶を投稿（初回はEnter）
@@ -66,6 +87,7 @@ chromium.use(stealth);
     }
   };
 
+  // 入室時のバイリンガル挨拶（アカウントログイン済みなので141文字でもそのまま送信OK）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".', true);
   await page.waitForTimeout(2000);
 
@@ -74,20 +96,25 @@ chromium.use(stealth);
   // ==========================================
   console.log('監視モード開始！コマンドを待機します...');
 
-  // 画面上の投稿一覧（投稿ID、本文、名前、トリップなどを含むブロック）を取得
+  // 画面上の投稿を「1投稿＝1要素」で重複なく取得する関数
   const getPosts = async () => {
     return await page.evaluate(() => {
-      // feederの各投稿ブロック（吹き出し＋アイコン＋名前を含む親要素）を抽出
-      // 投稿番号（例: 1313）や時刻を含む要素の親をたどって1投稿ずつまとめる
-      const blocks = Array.from(document.querySelectorAll('div, li, tr')).filter(el => {
+      const allDivs = Array.from(document.querySelectorAll('div, li, tr'));
+      const postBlocks = allDivs.filter(el => {
         const txt = el.innerText || '';
-        return /\d{2}:\d{2}:\d{2}/.test(txt) && txt.length < 500;
+        const timeMatches = txt.match(/\d{2}:\d{2}:\d{2}/g);
+        return timeMatches && timeMatches.length === 1 && txt.length < 400;
       });
-      return blocks.map(el => el.innerText.trim());
+
+      const uniquePosts = postBlocks.filter((el, _, arr) => {
+        return !arr.some(other => other !== el && other.contains(el) && other.innerText.includes('\n'));
+      });
+
+      return uniquePosts.map(el => el.innerText.trim());
     });
   };
 
-  // 入室前から画面にある投稿数を記録（過去ログへの誤反応防止）
+  // 入室前から画面にある投稿数を記録（過去ログ反応防止）
   const initialPosts = await getPosts();
   let prevTestCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test')).length;
   let prevByeCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye')).length;
@@ -105,19 +132,16 @@ chromium.use(stealth);
     const byePosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye'));
     if (byePosts.length > prevByeCount) {
       prevByeCount = byePosts.length;
-      // 一番新しく投稿された「huyubot/bye」の投稿ブロック（feederは上が最新か下が最新か両方対応できるよう最新を取得）
-      const latestByePost = byePosts[0];
-      const lines = latestByePost.split('\n').map(l => l.trim());
+      const latestByePost = byePosts;
 
-      // 名前が「ℎ𝑢𝑦𝑢_」または「huyu_」で、かつトリップ「tetrio」が含まれているか判定
-      const hasValidName = lines.some(l => l === 'ℎ𝑢𝑦𝑢_' || l === 'huyu_');
+      const hasValidName = latestByePost.includes(' 𝟮ℎ𝑢𝑦𝑢_') || latestByePost.includes(' ℎ𝑢𝑦𝑢_') || latestByePost.includes('ℎ𝑢𝑦𝑢_') || latestByePost.includes('huyu_');
       const hasValidTrip = latestByePost.includes('tetrio');
 
       if (hasValidName && hasValidTrip) {
         console.log('管理者本人からの bye コマンドを確認！退室します。');
         await sendChat('I am removing the bot; this may take a moment. Goodbye.');
         await page.waitForTimeout(2000);
-        break; // ループを抜けてブラウザを閉じる（退室）！
+        break;
       } else {
         console.log('権限のないユーザーからの bye コマンドを拒否しました。');
         await sendChat('You are not an administrator or a designated person.');
