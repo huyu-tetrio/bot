@@ -19,20 +19,21 @@ chromium.use(stealth);
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(6000);
 
-  console.log('=== 現在のタイトル ===', await page.title());
-
   // 2. パスワードを入れてログイン
   const passInput = page.locator('input[type="password"], input[type="text"]').first();
   await passInput.fill('HuyuTetr1s2o26');
   await passInput.press('Enter');
   await page.waitForTimeout(5000);
 
-  // 3. 「名前を入力」にボット名を入れる
-  await page.getByPlaceholder('名前を入力').fill('huyubot test');
+  // 3. 「名前を入力」にボット名を入れてEnter、入室完了まで10秒待つ！
+  const nameInput = page.getByPlaceholder('名前を入力');
+  await nameInput.fill('huyubot test');
+  await nameInput.press('Enter');
+  await page.waitForTimeout(10000);
 
   // 4. 「発言内容を入力（Enterで投稿）」に文字を入れてEnterで投稿！
   const chatInput = page.getByPlaceholder('発言内容を入力（Enterで投稿）');
-  await chatInput.fill('0円ステルス突破テスト成功！！');
+  await chatInput.fill('Hello world');
   await chatInput.press('Enter');
 
   await page.waitForTimeout(3000);
