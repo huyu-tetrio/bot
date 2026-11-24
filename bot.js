@@ -66,7 +66,7 @@ chromium.use(stealth);
     }
   };
 
-  await sendChat('0円ステルス突破成功！！', true);
+  await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".', true);
   await page.waitForTimeout(2000);
 
   // ==========================================
