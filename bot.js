@@ -25,7 +25,7 @@ chromium.use(stealth);
   const passInput = page.locator('input[type="password"], input[type="text"]').first();
   await passInput.fill('HuyuTetris2026');
   await passInput.press('Enter');
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(15000);
 
   // 3. 「名前を入力」にボット名を入れてEnter
   const nameInput = page.getByPlaceholder('名前を入力');
