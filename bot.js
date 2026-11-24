@@ -5,17 +5,19 @@ const { chromium } = require('playwright');
   const page = await browser.newPage();
 
   // 1. 部屋にアクセス
-  await page.goto('https://www1.x-feeder.info/huyu_praviteroom/');
-  await page.waitForTimeout(2000);
-
-  // 2. パスワードを入れてログインボタンを押す
-  // （※もし名前も入れる場合は後で調整できます）
-  await page.fill('input[type="password"], input[type="text"]', 'HuyuTetr1s2o26');
-  await page.click('input[type="submit"], button:has-text("ログイン")');
+  await page.goto('https://x-feeder.info');
   await page.waitForTimeout(3000);
 
-  // 3. チャット画面で発言する（最初のテスト）
-  const chatInput = page.locator('input[type="text"], textarea').first();
+  // 2. パスワードを入れてログイン
+  await page.getByPlaceholder('入室用パスワード').fill('HuyuTetr1s2o26');
+  await page.getByRole('button', { name: 'ログイン' }).click();
+  await page.waitForTimeout(4000);
+
+  // 3. 初回アクセスなので「名前」を入れる
+  await page.getByPlaceholder('名前').fill('huyubot (テスト中）');
+
+  // 4. 発言欄に文字を入れて、初回モード通り「Enter」で投稿する
+  const chatInput = page.locator('textarea').first();
   await chatInput.fill('GitHubボットのテスト発言です！');
   await chatInput.press('Enter');
 
