@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
   });
   const page = await context.newPage();
 
-  // 1. URLが勝手に書き換わらないように分割してつなぐ！
+  // 1. 部屋にアクセス
   const roomUrl = 'https://' + 'www1.x-feeder.info/' + 'huyu_praviteroom/';
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(4000);
@@ -17,13 +17,14 @@ const { chromium } = require('playwright');
   const passInput = page.locator('input').first();
   await passInput.fill('HuyuTetr1s2o26');
   await passInput.press('Enter');
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(5000);
 
-  // 3. 「名前を入力」にボット名を入れる
-  await page.getByPlaceholder('名前を入力').fill('huyubot test');
+  // 3. 画面に見えている1番目の入力欄（名前欄）に直接入力！
+  const nameInput = page.locator('input[type="text"]:visible').first();
+  await nameInput.fill('huyubot test');
 
-  // 4. 「発言内容を入力（Enterで投稿）」に文字を入れてEnterで投稿！
-  const chatInput = page.getByPlaceholder('発言内容を入力（Enterで投稿）');
+  // 4. 画面に見えている発言欄（textarea）に直接入力してEnterで投稿！
+  const chatInput = page.locator('textarea:visible').first();
   await chatInput.fill('GitHubボットのテスト発言です！');
   await chatInput.press('Enter');
 
