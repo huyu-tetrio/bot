@@ -31,10 +31,17 @@ chromium.use(stealth);
   await nameInput.press('Enter');
   await page.waitForTimeout(10000);
 
-  // 4. 「発言内容を入力（Enterで投稿）」に文字を入れてEnterで投稿！
-  const chatInput = page.getByPlaceholder('発言内容を入力（Enterで投稿）');
-  await chatInput.fill('Hello world');
+  // 4. 文字に頼らず「発言欄（textarea）」を直接つかんで文字を入れる！
+  const chatInput = page.locator('textarea').first();
+  await chatInput.fill('0円ステルス突破テスト成功！！');
+  await page.waitForTimeout(500);
+
+  // 5. Enterキーを押して、念のため「投稿」ボタンもクリック！
   await chatInput.press('Enter');
+  const postBtn = page.getByRole('button', { name: '投稿' });
+  if (await postBtn.isVisible()) {
+    await postBtn.click();
+  }
 
   await page.waitForTimeout(3000);
   await browser.close();
