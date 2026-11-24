@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   const page = await browser.newPage();
 
   // 1. 部屋にアクセス
-  await page.goto('https://x-feeder.info');
+  await page.goto('https://www1.x-feeder.info/huyu_praviteroom/');
   await page.waitForTimeout(3000);
 
   // 2. パスワードを入れてログイン
