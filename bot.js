@@ -58,7 +58,7 @@ chromium.use(stealth);
     await page.waitForTimeout(8000);
   }
 
-  // 4. 初回チュートリアルを消して最初の挨拶を投稿（初回はEnter）
+  // 4. 初回チュートリアルを消す
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
   const skipBtn = page.locator('.introjs-skipbutton, .introjs-donebutton').first();
@@ -67,28 +67,32 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
+  // ★ここを追加！左上の「一行／複数行 入力切替」ボタンを押して改行(\n)を有効化！
+  const multiLineBtn = page.locator('[title*="一行／複数行"], [title*="入力切替"]').first();
+  if (await multiLineBtn.isVisible()) {
+    await multiLineBtn.click({ force: true });
+    await page.waitForTimeout(500);
+    console.log('複数行入力モードに切り替えました！');
+  }
+
   const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
 
-  // メッセージ送信用の共通関数（初回と2回目以降の両方に対応）
-  const sendChat = async (text, isFirst = false) => {
+  // メッセージ送信用の共通関数（複数行モードなので常に Shift+Enter または 投稿ボタン で送信）
+  const sendChat = async (text) => {
     await chatInput.fill(text, { force: true });
     await page.waitForTimeout(300);
-    if (isFirst) {
-      await chatInput.press('Enter');
-    } else {
-      await chatInput.press('Shift+Enter');
-      await page.waitForTimeout(300);
-      if ((await chatInput.inputValue()).length > 0) {
-        const postBtn = page.getByRole('button', { name: '投稿' }).first();
-        if (await postBtn.isVisible()) {
-          await postBtn.click({ force: true });
-        }
+    await chatInput.press('Shift+Enter');
+    await page.waitForTimeout(300);
+    if ((await chatInput.inputValue()).length > 0) {
+      const postBtn = page.getByRole('button', { name: '投稿' }).first();
+      if (await postBtn.isVisible()) {
+        await postBtn.click({ force: true });
       }
     }
   };
 
-  // 入室時のバイリンガル挨拶（アカウントログイン済みなので141文字でもそのまま送信OK）
-  await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".', true);
+  // 入室時のバイリンガル挨拶（複数行モードなので \n でしっかり2行改行される！）
+  await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
 
   // ==========================================
@@ -132,12 +136,12 @@ chromium.use(stealth);
     const byePosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye'));
     if (byePosts.length > prevByeCount) {
       prevByeCount = byePosts.length;
-      const latestByePost = byePosts;
+      const latestByePost = byePosts.at(0);
 
-      const hasValidName = latestByePost.includes(' 𝟮ℎ𝑢𝑦𝑢_') || latestByePost.includes(' ℎ𝑢𝑦𝑢_') || latestByePost.includes('ℎ𝑢𝑦𝑢_') || latestByePost.includes('huyu_');
+      // 個人トリップ「tetrio」が含まれていれば管理者本人と判定！
       const hasValidTrip = latestByePost.includes('tetrio');
 
-      if (hasValidName && hasValidTrip) {
+      if (hasValidTrip) {
         console.log('管理者本人からの bye コマンドを確認！退室します。');
         await sendChat('I am removing the bot; this may take a moment. Goodbye.');
         await page.waitForTimeout(2000);
