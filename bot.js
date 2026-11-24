@@ -21,17 +21,28 @@ chromium.use(stealth);
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(6000);
 
-  // 2. パスワードを入れてログイン
+   // 2. パスワードを入れてログイン
+  console.log('アクセス直後のタイトル:', await page.title());
   const passInput = page.locator('input[type="password"], input[type="text"]').first();
   await passInput.fill('HuyuTetris2026');
   await passInput.press('Enter');
-  await page.waitForTimeout(15000);
+  await page.waitForTimeout(8000);
 
-  // 3. 「名前を入力」にボット名を入れてEnter
+  // パスワード送信後に画面がどうなっているかログに出す！
+  console.log('パス送信後のURL:', page.url());
+  console.log('パス送信後のタイトル:', await page.title());
+  const pageText = await page.evaluate(() => document.body.innerText.slice(0, 300));
+  console.log('画面の文字:', pageText);
+
+  // 3. 「名前を入力」があれば入力する（もし無ければスキップして次へ！）
   const nameInput = page.getByPlaceholder('名前を入力');
-  await nameInput.fill('huyubot test');
-  await nameInput.press('Enter');
-  await page.waitForTimeout(10000);
+  if (await nameInput.isVisible()) {
+    await nameInput.fill('huyubot test');
+    await nameInput.press('Enter');
+    await page.waitForTimeout(10000);
+  } else {
+    console.log('「名前を入力」が見当たらないためスキップします');
+  }
 
   // 4. 初回チュートリアルを消して最初の挨拶を投稿（初回はEnter）
   await page.keyboard.press('Escape');
