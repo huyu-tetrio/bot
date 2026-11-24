@@ -31,20 +31,26 @@ chromium.use(stealth);
   await nameInput.press('Enter');
   await page.waitForTimeout(10000);
 
-  // 4. 初回チュートリアルを消してから発言する！
-  // 画面上のどこかを強制クリックするか、Escapeキーでチュートリアル(introjs)を閉じる
+    // 4. 初回チュートリアルをスキップ＆入力欄へ直接打ち込んでEnter！
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(1000);
-
-  // 実際のプレースホルダー名「発言内容を入力 (Shift + Enterで投稿)」で取得
-  const chatInput = page.getByPlaceholder('発言内容を入力 (Shift + Enterで投稿)');
-  
-  // もしオーバーレイが残っていても強制的にフォーカスを当てて入力する
-  await chatInput.fill('0円ステルス突破成功！！');
   await page.waitForTimeout(500);
 
-  // Shift + Enter で投稿！（確実に送るため「投稿」ボタンをクリックする形でもOK）
-  await chatInput.press('Shift+Enter');
+  // もしチュートリアルのスキップボタン等があれば押す
+  const skipBtn = page.locator('.introjs-skipbutton, .introjs-donebutton').first();
+  if (await skipBtn.isVisible()) {
+    await skipBtn.click({ force: true });
+    await page.waitForTimeout(500);
+  }
+
+  // 初回用の「発言内容を入力」を含む欄を取得（Enterで投稿でもShift+Enterでも両方対応！）
+  const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
+  
+  // チュートリアルが残っていても強制的にフォーカスして文字を入れる
+  await chatInput.fill('0円ステルス突破成功！！', { force: true });
+  await page.waitForTimeout(500);
+
+  // 初回仕様の Enter で投稿！
+  await chatInput.press('Enter');
 
   await page.waitForTimeout(3000);
   await browser.close();
