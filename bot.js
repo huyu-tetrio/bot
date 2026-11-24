@@ -8,8 +8,9 @@ const { chromium } = require('playwright');
   });
   const page = await context.newPage();
 
-  // 1. 部屋にアクセス
-  await page.goto('https://x-feeder.info', { waitUntil: 'domcontentloaded' });
+  // 1. URLが勝手に書き換わらないように分割してつなぐ！
+  const roomUrl = 'https://' + 'www1.x-feeder.info/' + 'huyu_praviteroom/';
+  await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(4000);
 
   // 2. パスワードを入れてログイン
