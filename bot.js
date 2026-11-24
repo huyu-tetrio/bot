@@ -21,18 +21,15 @@ chromium.use(stealth);
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(6000);
 
-   // 2. パスワードを入れてログイン
-  console.log('アクセス直後のタイトル:', await page.title());
-  const passInput = page.locator('input[type="password"], input[type="text"]').first();
+   // 2. 「type="password"」の欄だけを狙い撃ちしてパスワードを入れ、「ログイン」ボタンを押す！
+  const passInput = page.locator('input[type="password"]').first();
   await passInput.fill('HuyuTetris2026');
-  await passInput.press('Enter');
-  await page.waitForTimeout(8000);
+  await page.waitForTimeout(500);
 
-  // パスワード送信後に画面がどうなっているかログに出す！
-  console.log('パス送信後のURL:', page.url());
-  console.log('パス送信後のタイトル:', await page.title());
-  const pageText = await page.evaluate(() => document.body.innerText.slice(0, 300));
-  console.log('画面の文字:', pageText);
+  // Enterではなく「ログイン」ボタンを確実にクリック！
+  const loginBtn = page.locator('input[type="submit"], button:has-text("ログイン"), input[value="ログイン"]').first();
+  await loginBtn.click();
+  await page.waitForTimeout(6000);
 
   // 3. 「名前を入力」があれば入力する（もし無ければスキップして次へ！）
   const nameInput = page.getByPlaceholder('名前を入力');
