@@ -7,11 +7,13 @@ chromium.use(stealth);
     headless: true,
     args: ['--disable-blink-features=AutomationControlled']
   });
+
   const context = await browser.newContext({
     locale: 'ja-JP',
     viewport: { width: 1280, height: 720 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
+
   const page = await context.newPage();
 
   // 1. 部屋にアクセス
@@ -21,37 +23,97 @@ chromium.use(stealth);
 
   // 2. パスワードを入れてログイン
   const passInput = page.locator('input[type="password"], input[type="text"]').first();
-  await passInput.fill('HuyuTetr1s2o26');
+  await passInput.fill('HuyuTetris2026');
   await passInput.press('Enter');
   await page.waitForTimeout(5000);
 
-  // 3. 「名前を入力」にボット名を入れてEnter、入室完了まで10秒待つ！
+  // 3. 「名前を入力」にボット名を入れてEnter
   const nameInput = page.getByPlaceholder('名前を入力');
   await nameInput.fill('huyubot test');
   await nameInput.press('Enter');
   await page.waitForTimeout(10000);
 
-    // 4. 初回チュートリアルをスキップ＆入力欄へ直接打ち込んでEnter！
+  // 4. 初回チュートリアルを消して最初の挨拶を投稿（初回はEnter）
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
-
-  // もしチュートリアルのスキップボタン等があれば押す
   const skipBtn = page.locator('.introjs-skipbutton, .introjs-donebutton').first();
   if (await skipBtn.isVisible()) {
     await skipBtn.click({ force: true });
     await page.waitForTimeout(500);
   }
 
-  // 初回用の「発言内容を入力」を含む欄を取得（Enterで投稿でもShift+Enterでも両方対応！）
   const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
-  
-  // チュートリアルが残っていても強制的にフォーカスして文字を入れる
   await chatInput.fill('0円ステルス突破成功！！', { force: true });
   await page.waitForTimeout(500);
-
-  // 初回仕様の Enter で投稿！
   await chatInput.press('Enter');
+  await page.waitForTimeout(2000);
 
-  await page.waitForTimeout(3000);
+  // ==========================================
+  // 5. 常駐監視ループ（キュー＋10秒クールタイム制）
+  // ==========================================
+  console.log('監視モード開始！huyubot/test を待機します...');
+
+  const getChatLines = async () => {
+    return await page.evaluate(() => {
+      const bodyText = document.body.innerText || '';
+      return bodyText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    });
+  };
+
+  // 入室直後の既存コマンド数を記録
+  let prevCount = (await getChatLines()).filter(line => line === 'huyubot/test').length;
+
+  // 返信待ちの回数（キュー）と、10秒計測用のタイマー
+  let pendingReplies = 0;
+  let cooldownStartTime = 0;
+
+  // 30分間ループ
+  const endTime = Date.now() + 30 * 60 * 1000;
+
+  while (Date.now() < endTime) {
+    const lines = await getChatLines();
+    const currentCount = lines.filter(line => line === 'huyubot/test').length;
+
+    // 新しい「huyubot/test」が打たれたら、増えた回数分だけ待機リストに積む
+    if (currentCount > prevCount) {
+      const added = currentCount - prevCount;
+      prevCount = currentCount;
+
+      if (pendingReplies === 0 && cooldownStartTime === 0) {
+        cooldownStartTime = Date.now();
+      }
+      pendingReplies += added;
+      console.log(`コマンド検知！(＋${added}回 / 現在の待機数: ${pendingReplies}回)`);
+    }
+
+    // 待機リストに1回以上あり、カウント開始から10秒以上経過していたら1回投稿
+    if (pendingReplies > 0 && Date.now() - cooldownStartTime >= 10000) {
+      console.log(`10秒経過！返信を実行します（残り待機数: ${pendingReplies - 1}回）`);
+
+      await chatInput.fill('This is a test post.', { force: true });
+      await page.waitForTimeout(300);
+      await chatInput.press('Shift+Enter');
+
+      // 送信保険（「投稿」ボタンクリック）
+      await page.waitForTimeout(300);
+      if ((await chatInput.inputValue()).length > 0) {
+        const postBtn = page.getByRole('button', { name: '投稿' }).first();
+        if (await postBtn.isVisible()) {
+          await postBtn.click({ force: true });
+        }
+      }
+
+      pendingReplies -= 1;
+
+      if (pendingReplies > 0) {
+        cooldownStartTime = Date.now();
+      } else {
+        cooldownStartTime = 0;
+      }
+    }
+
+    await page.waitForTimeout(1000);
+  }
+
   await browser.close();
 })();
