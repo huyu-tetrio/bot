@@ -19,7 +19,7 @@ chromium.use(stealth);
   // 0. 正しいログインURL「www.x-feeder.info/account/login.php」でHuyuBotアカウントにログイン
   if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
     console.log('HuyuBotアカウントでログインを試みます...');
-    await page.goto('https://x-feeder.info', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://www.x-feeder.info/account/login.php', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(4000);
 
     const emailInput = page.locator('input[type="text"]:visible, input[type="email"]:visible').first();
