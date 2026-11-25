@@ -19,7 +19,8 @@ chromium.use(stealth);
   // 0. HuyuBotアカウントにログイン
   if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
     console.log('HuyuBotアカウントでログインを試みます...');
-    await page.goto('https://www.x-feeder.info/account/login.php', { waitUntil: 'domcontentloaded' });
+    const loginUrl = 'https://' + 'www.x-feeder.info/account/login.php';
+    await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(4000);
 
     const emailInput = page.locator('input[type="text"]:visible, input[type="email"]:visible').first();
@@ -36,7 +37,7 @@ chromium.use(stealth);
   }
 
   // 1. 部屋にアクセス
-  const roomUrl = 'https://' + 'www1.x-feeder.info/' + 'huyu_praviteroom/';
+  const roomUrl = 'https://' + 'www1.x-feeder.info/huyu_praviteroom/';
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(5000);
 
@@ -67,27 +68,50 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★ 入力欄のすぐ近くにある「一行/複数行」切替ボタンを探して押す
-  const initialInput = page.getByPlaceholder(/発言内容を入力/).first();
-  const toggleMultiLine = async () => {
-    const byAttr = page.locator('[title*="行"], [data-original-title*="行"], [aria-label*="行"], [title*="切替"], [title*="モード"]').first();
-    if (await byAttr.isVisible()) {
-      await byAttr.click({ force: true });
-      await page.waitForTimeout(500);
-      console.log('属性一致で複数行モードに切り替えました！');
+  // ★ 複数行モード（プレースホルダーが「Shift + Enterで投稿」になる）まで確実に切り替える！
+  const ensureMultiLine = async () => {
+    const checkMulti = async () => {
+      return (await page.getByPlaceholder(/Shift.*Enter/).count()) > 0;
+    };
+
+    if (await checkMulti()) {
+      console.log('すでに複数行モードです！');
       return;
     }
 
-    const inputParent = initialInput.locator('xpath=..');
-    const neighborBtn = inputParent.locator('button, a, [role="button"], i, span[onclick]').first();
-    if (await neighborBtn.isVisible()) {
-      await neighborBtn.click({ force: true });
+    // 入力欄の直前にある要素（左側の三本線アイコン）を優先してクリック
+    const inputBox = page.getByPlaceholder(/発言内容を入力/).first();
+    const prevBtn = inputBox.locator('xpath=preceding-sibling::*');
+    if (await prevBtn.isVisible()) {
+      await prevBtn.click({ force: true });
       await page.waitForTimeout(500);
-      console.log('入力欄の隣のボタンをクリックして切り替えを試みました！');
+      if (await checkMulti()) {
+        console.log('直前のボタンで複数行モードに切り替え成功！');
+        return;
+      }
     }
+
+    // 念のため、入力欄の親や祖父母要素内にある全ボタンを順番に試して「Shift + Enter」に変わるか確認
+    const container = inputBox.locator('xpath=ancestor::div');
+    const candidates = container.locator('button, a, span, i, div[onclick]');
+    const count = await candidates.count();
+    for (let i = 0; i < count; i++) {
+      const el = candidates.nth(i);
+      const txt = (await el.innerText().catch(() => '')).trim();
+      if (txt === '投稿' || txt === '特殊な投稿') continue;
+      if (await el.isVisible()) {
+        await el.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(300);
+        if (await checkMulti()) {
+          console.log(`候補ボタン(${i}番目)で複数行モードに切り替え成功！`);
+          return;
+        }
+      }
+    }
+    console.log('警告：複数行モードへの切り替えが確認できませんでした');
   };
 
-  await toggleMultiLine();
+  await ensureMultiLine();
 
   // ★ 複数行モード（textarea）で確実に改行して送信する関数
   const sendChat = async (text) => {
@@ -100,6 +124,7 @@ chromium.use(stealth);
         await activeInput.type(lines[i]);
       }
       if (i < lines.length - 1) {
+        // 複数行モードならEnterで改行される！
         await activeInput.press('Enter');
         await page.waitForTimeout(200);
       }
@@ -107,11 +132,16 @@ chromium.use(stealth);
 
     await page.waitForTimeout(300);
 
-    const postBtn = page.getByRole('button', { name: '投稿' }).first();
-    if (await postBtn.isVisible()) {
-      await postBtn.click({ force: true });
-    } else {
-      await activeInput.press('Shift+Enter');
+    // 複数行モードの仕様通り「Shift+Enter」で送信（残っていたら「投稿」ボタンをクリック）
+    await activeInput.press('Shift+Enter');
+    await page.waitForTimeout(400);
+
+    const remaining = await activeInput.inputValue().catch(() => '');
+    if (remaining.length > 0) {
+      const postBtn = page.getByRole('button', { name: '投稿' }).first();
+      if (await postBtn.isVisible()) {
+        await postBtn.click({ force: true });
+      }
     }
   };
 
