@@ -67,100 +67,64 @@ chromium.use(stealth);
     await skipBtn.click({ force: true });
     await page.waitForTimeout(500);
   }
-  const debugHtml = await page.evaluate(() => {
-    const el = document.querySelector('input[placeholder*="発言"], textarea[placeholder*="発言"]');
-    return el ? el.parentElement.parentElement.outerHTML : '入力欄なし';
-  });
-  console.log('=== 入力欄のHTML ===\n' + debugHtml);
 
-  // ★ HTML要素（textarea に変わったかどうか）で判定して確実に複数行モードへ切り替える
-  const ensureMultiLine = async () => {
-    const isTextareaVisible = async () => {
-      return await page.locator('textarea[placeholder*="発言内容を入力"]:visible').count() > 0;
-    };
+  // ★ 特定したID「#input_type」をクリックして複数行モード（#post_form_multi）へ切り替え！
+  const multiInput = page.locator('#post_form_multi');
+  if (!(await multiInput.isVisible())) {
+    await page.locator('#input_type').click({ force: true });
+    await page.waitForTimeout(500);
+    console.log('複数行モード（#post_form_multi）に切り替えました！');
+  }
 
-    if (await isTextareaVisible()) {
-      console.log('すでに複数行モード（textarea）です！');
-      return;
-    }
-
-    // 入力欄（input）を基準に、同じ行（親要素の1つ上または2つ上）にある「左側の切替ボタン」を探してクリック
-    const singleInput = page.locator('input[placeholder*="発言内容を入力"]:visible').first();
-    const wrapper = singleInput.locator('xpath=ancestor::div').first();
-    const icons = wrapper.locator('button, a, i, span, svg, div[role="button"]');
-    const count = await icons.count();
-
-    for (let i = 0; i < count; i++) {
-      const target = icons.nth(i);
-      const text = (await target.innerText().catch(() => '')).trim();
-      if (text.includes('投稿') || text.includes('名前')) continue;
-
-      if (await target.isVisible()) {
-        await target.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(400);
-        if (await isTextareaVisible()) {
-          console.log('HTML要素のクリックで複数行モード（textarea）に切り替え成功！');
-          return;
-        }
-      }
-    }
-
-    // もし1つ上のdivで見つからなければ、2つ上のdiv（フォーム行全体）で同じチェックを実行
-    const outerWrapper = singleInput.locator('xpath=ancestor::div').nth(1);
-    const outerIcons = outerWrapper.locator('button, a, i, span, svg, div[role="button"]');
-    const outerCount = await outerIcons.count();
-
-    for (let i = 0; i < outerCount; i++) {
-      const target = outerIcons.nth(i);
-      const text = (await target.innerText().catch(() => '')).trim();
-      if (text.includes('投稿') || text.includes('名前')) continue;
-
-      if (await target.isVisible()) {
-        await target.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(400);
-        if (await isTextareaVisible()) {
-          console.log('上位HTML要素のクリックで複数行モード（textarea）に切り替え成功！');
-          return;
-        }
-      }
-    }
-
-    console.log('警告：textareaへの切り替えが確認できませんでした');
-  };
-
-  await ensureMultiLine();
-
-  // ★ 複数行モード（textarea）で確実に改行して送信する関数
+  // ★ #post_form_multi に改行入りで入力し、#post_btn で確実に送信する関数
   const sendChat = async (text) => {
-    const activeInput = page.getByPlaceholder(/発言内容を入力/).first();
-    await activeInput.fill('', { force: true });
+    if (!(await multiInput.isVisible())) {
+      await page.locator('#input_type').click({ force: true });
+      await page.waitForTimeout(300);
+    }
+
+    await multiInput.fill('', { force: true });
 
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].length > 0) {
-        await activeInput.type(lines[i]);
+        await multiInput.type(lines[i]);
       }
       if (i < lines.length - 1) {
-        await activeInput.press('Enter');
-        await page.waitForTimeout(200);
+        await multiInput.press('Enter');
+        await page.waitForTimeout(150);
       }
     }
 
     await page.waitForTimeout(300);
-
-    await activeInput.press('Shift+Enter');
-    await page.waitForTimeout(400);
-
-    const remaining = await activeInput.inputValue().catch(() => '');
-    if (remaining.length > 0) {
-      const postBtn = page.getByRole('button', { name: '投稿' }).first();
-      if (await postBtn.isVisible()) {
-        await postBtn.click({ force: true });
-      }
-    }
+    await page.locator('#post_btn').click({ force: true });
   };
 
-  // 入室時のバイリンガル挨拶（1つの吹き出しの中で2行改行されます！）
+  // ★ 日本時間（JST）の「YYYY/MM/DD HH:MM:SS」を作る関数
+  const getJstDateTime = () => {
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const yyyy = now.getUTCFullYear();
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(now.getUTCDate()).padStart(2, '0');
+    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const min = String(now.getUTCMinutes()).padStart(2, '0');
+    const ss = String(now.getUTCSeconds()).padStart(2, '0');
+    return `${yyyy}/${mm}/${dd} ${hh}:${min}:${ss}`;
+  };
+
+  // ★ 投稿テキストの中から「発言者の名前」を抜き出す関数
+  const extractSenderName = (postText) => {
+    const lines = postText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    for (const line of lines) {
+      if (line === 'huyubot/test') continue;
+      if (/^\d+$/.test(line)) continue;
+      if (line.includes('huyubot/test')) continue;
+      return line;
+    }
+    return '名無し';
+  };
+
+  // 入室時のバイリンガル挨拶（1つの吹き出しの中で綺麗に2行改行されます！）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
 
@@ -190,7 +154,8 @@ chromium.use(stealth);
   let prevTestCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test')).length;
   let prevByeCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye')).length;
 
-  let pendingReplies = 0;
+  // 誰がtestを打ったかを順番に覚えておくキュー（配列）
+  const testQueue = [];
   let cooldownStartTime = 0;
 
   const endTime = Date.now() + 30 * 60 * 1000;
@@ -218,23 +183,31 @@ chromium.use(stealth);
       }
     }
 
-    // --- B. 「huyubot/test」のチェック（10秒クールタイム＋キュー） ---
-    const currentTestCount = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test')).length;
-    if (currentTestCount > prevTestCount) {
-      const added = currentTestCount - prevTestCount;
-      prevTestCount = currentTestCount;
-      if (pendingReplies === 0 && cooldownStartTime === 0) {
+    // --- B. 「huyubot/test」のチェック（10秒クールタイム＋発言者記録キュー） ---
+    const testPosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test'));
+    if (testPosts.length > prevTestCount) {
+      const added = testPosts.length - prevTestCount;
+      prevTestCount = testPosts.length;
+
+      if (testQueue.length === 0 && cooldownStartTime === 0) {
         cooldownStartTime = Date.now();
       }
-      pendingReplies += added;
-      console.log(`testコマンド検知！(＋${added}回 / 待機数: ${pendingReplies}回)`);
+
+      // 新しく増えた投稿（上から順に新しい）から発言者の名前を取り出してキューに入れる
+      for (let i = added - 1; i >= 0; i--) {
+        const sender = extractSenderName(testPosts[i] || '');
+        testQueue.push(sender);
+      }
+      console.log(`testコマンド検知！(＋${added}回 / 待機数: ${testQueue.length}回)`);
     }
 
-    if (pendingReplies > 0 && Date.now() - cooldownStartTime >= 10000) {
-      console.log('10秒経過！test返信を実行します');
-      await sendChat('This is a test post.');
-      pendingReplies -= 1;
-      cooldownStartTime = pendingReplies > 0 ? Date.now() : 0;
+    if (testQueue.length > 0 && Date.now() - cooldownStartTime >= 10000) {
+      const targetUser = testQueue.shift();
+      const dateTimeStr = getJstDateTime();
+      console.log(`10秒経過！test返信を実行します（対象: ${targetUser}）`);
+
+      await sendChat(`この投稿はテストです\nThis is a test post.\n${targetUser} ${dateTimeStr}`);
+      cooldownStartTime = testQueue.length > 0 ? Date.now() : 0;
     }
 
     await page.waitForTimeout(2500);
