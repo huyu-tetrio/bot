@@ -67,6 +67,11 @@ chromium.use(stealth);
     await skipBtn.click({ force: true });
     await page.waitForTimeout(500);
   }
+  const debugHtml = await page.evaluate(() => {
+    const el = document.querySelector('input[placeholder*="発言"], textarea[placeholder*="発言"]');
+    return el ? el.parentElement.parentElement.outerHTML : '入力欄なし';
+  });
+  console.log('=== 入力欄のHTML ===\n' + debugHtml);
 
   // ★ HTML要素（textarea に変わったかどうか）で判定して確実に複数行モードへ切り替える
   const ensureMultiLine = async () => {
