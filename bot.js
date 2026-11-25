@@ -68,37 +68,59 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★ 入力欄のすぐ左隣にある「≡（一行/複数行切替）」アイコンを座標で直接クリック！
+  // ★ HTML要素（textarea に変わったかどうか）で判定して確実に複数行モードへ切り替える
   const ensureMultiLine = async () => {
-    const checkMulti = async () => {
-      return (await page.getByPlaceholder(/Shift.*Enter/).count()) > 0;
+    const isTextareaVisible = async () => {
+      return await page.locator('textarea[placeholder*="発言内容を入力"]:visible').count() > 0;
     };
 
-    if (await checkMulti()) {
-      console.log('すでに複数行モードです！');
+    if (await isTextareaVisible()) {
+      console.log('すでに複数行モード（textarea）です！');
       return;
     }
 
-    const inputBox = page.getByPlaceholder(/発言内容を入力/).first();
-    const box = await inputBox.boundingBox();
+    // 入力欄（input）を基準に、同じ行（親要素の1つ上または2つ上）にある「左側の切替ボタン」を探してクリック
+    const singleInput = page.locator('input[placeholder*="発言内容を入力"]:visible').first();
+    const wrapper = singleInput.locator('xpath=ancestor::div').first();
+    const icons = wrapper.locator('button, a, i, span, svg, div[role="button"]');
+    const count = await icons.count();
 
-    if (box) {
-      // 入力欄の左端から少し左（12px, 20px, 28px左）の同じ高さを順にクリックしてテスト
-      const offsets =;
-      for (const offset of offsets) {
-        const clickX = box.x - offset;
-        const clickY = box.y + box.height / 2;
-        if (clickX > 0) {
-          await page.mouse.click(clickX, clickY);
-          await page.waitForTimeout(400);
-          if (await checkMulti()) {
-            console.log(`入力欄の左 ${offset}px をクリックして複数行モードに切り替え成功！`);
-            return;
-          }
+    for (let i = 0; i < count; i++) {
+      const target = icons.nth(i);
+      const text = (await target.innerText().catch(() => '')).trim();
+      if (text.includes('投稿') || text.includes('名前')) continue;
+
+      if (await target.isVisible()) {
+        await target.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await isTextareaVisible()) {
+          console.log('HTML要素のクリックで複数行モード（textarea）に切り替え成功！');
+          return;
         }
       }
     }
-    console.log('警告：座標クリックでも複数行モードになりませんでした');
+
+    // もし1つ上のdivで見つからなければ、2つ上のdiv（フォーム行全体）で同じチェックを実行
+    const outerWrapper = singleInput.locator('xpath=ancestor::div').nth(1);
+    const outerIcons = outerWrapper.locator('button, a, i, span, svg, div[role="button"]');
+    const outerCount = await outerIcons.count();
+
+    for (let i = 0; i < outerCount; i++) {
+      const target = outerIcons.nth(i);
+      const text = (await target.innerText().catch(() => '')).trim();
+      if (text.includes('投稿') || text.includes('名前')) continue;
+
+      if (await target.isVisible()) {
+        await target.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+        if (await isTextareaVisible()) {
+          console.log('上位HTML要素のクリックで複数行モード（textarea）に切り替え成功！');
+          return;
+        }
+      }
+    }
+
+    console.log('警告：textareaへの切り替えが確認できませんでした');
   };
 
   await ensureMultiLine();
@@ -114,7 +136,6 @@ chromium.use(stealth);
         await activeInput.type(lines[i]);
       }
       if (i < lines.length - 1) {
-        // 複数行モードならEnterで改行される！
         await activeInput.press('Enter');
         await page.waitForTimeout(200);
       }
@@ -122,7 +143,6 @@ chromium.use(stealth);
 
     await page.waitForTimeout(300);
 
-    // 複数行モードの仕様通り「Shift+Enter」で送信（残っていたら「投稿」ボタンをクリック）
     await activeInput.press('Shift+Enter');
     await page.waitForTimeout(400);
 
