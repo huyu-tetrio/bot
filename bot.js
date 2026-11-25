@@ -68,7 +68,7 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★ 複数行モード（プレースホルダーが「Shift + Enterで投稿」になる）まで確実に切り替える！
+  // ★ 入力欄のすぐ左隣にある「≡（一行/複数行切替）」アイコンを座標で直接クリック！
   const ensureMultiLine = async () => {
     const checkMulti = async () => {
       return (await page.getByPlaceholder(/Shift.*Enter/).count()) > 0;
@@ -79,36 +79,26 @@ chromium.use(stealth);
       return;
     }
 
-    // 入力欄の直前にある要素（左側の三本線アイコン）を優先してクリック
     const inputBox = page.getByPlaceholder(/発言内容を入力/).first();
-    const prevBtn = inputBox.locator('xpath=preceding-sibling::*');
-    if (await prevBtn.isVisible()) {
-      await prevBtn.click({ force: true });
-      await page.waitForTimeout(500);
-      if (await checkMulti()) {
-        console.log('直前のボタンで複数行モードに切り替え成功！');
-        return;
-      }
-    }
+    const box = await inputBox.boundingBox();
 
-    // 念のため、入力欄の親や祖父母要素内にある全ボタンを順番に試して「Shift + Enter」に変わるか確認
-    const container = inputBox.locator('xpath=ancestor::div');
-    const candidates = container.locator('button, a, span, i, div[onclick]');
-    const count = await candidates.count();
-    for (let i = 0; i < count; i++) {
-      const el = candidates.nth(i);
-      const txt = (await el.innerText().catch(() => '')).trim();
-      if (txt === '投稿' || txt === '特殊な投稿') continue;
-      if (await el.isVisible()) {
-        await el.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(300);
-        if (await checkMulti()) {
-          console.log(`候補ボタン(${i}番目)で複数行モードに切り替え成功！`);
-          return;
+    if (box) {
+      // 入力欄の左端から少し左（12px, 20px, 28px左）の同じ高さを順にクリックしてテスト
+      const offsets =;
+      for (const offset of offsets) {
+        const clickX = box.x - offset;
+        const clickY = box.y + box.height / 2;
+        if (clickX > 0) {
+          await page.mouse.click(clickX, clickY);
+          await page.waitForTimeout(400);
+          if (await checkMulti()) {
+            console.log(`入力欄の左 ${offset}px をクリックして複数行モードに切り替え成功！`);
+            return;
+          }
         }
       }
     }
-    console.log('警告：複数行モードへの切り替えが確認できませんでした');
+    console.log('警告：座標クリックでも複数行モードになりませんでした');
   };
 
   await ensureMultiLine();
