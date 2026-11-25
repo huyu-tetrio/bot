@@ -16,10 +16,10 @@ chromium.use(stealth);
 
   const page = await context.newPage();
 
-  // 0. 正しいログインURL「www.x-feeder.info/account/login.php」でHuyuBotアカウントにログイン
+  // 0. HuyuBotアカウントにログイン
   if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
     console.log('HuyuBotアカウントでログインを試みます...');
-    await page.goto('https://www.x-feeder.info/account/login.php', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://x-feeder.info', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(4000);
 
     const emailInput = page.locator('input[type="text"]:visible, input[type="email"]:visible').first();
@@ -35,12 +35,12 @@ chromium.use(stealth);
     }
   }
 
-  // 1. 部屋にアクセス（部屋サーバーは www1 のまま！）
+  // 1. 部屋にアクセス
   const roomUrl = 'https://' + 'www1.x-feeder.info/' + 'huyu_praviteroom/';
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(5000);
 
-  // 2. 部屋のパスワード（HuyuTetr1s2o26）を入れて入室
+  // 2. 部屋のパスワードを入れて入室
   const roomPassInput = page.locator('input[type="password"]:visible').first();
   if (await roomPassInput.isVisible()) {
     await roomPassInput.fill('HuyuTetr1s2o26');
@@ -50,7 +50,7 @@ chromium.use(stealth);
     await page.waitForTimeout(6000);
   }
 
-  // 3. もし未ログイン（ゲスト状態）になった場合だけ「名前を入力」を入れる
+  // 3. 未ログイン時のみ名前入力
   const nameInput = page.getByPlaceholder('名前を入力');
   if (await nameInput.isVisible()) {
     await nameInput.fill('huyubot test');
@@ -67,11 +67,12 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // 左上の「一行／複数行 入力切替」ボタンを押して改行モードにする
-  const multiLineBtn = page.locator('[title*="一行／複数行"], [title*="入力切替"]').first();
+  // ★半角スラッシュ「一行/複数行 入力切替」を確実に押す！
+  const multiLineBtn = page.locator('[title*="一行/複数行"], [data-original-title*="一行/複数行"], [aria-label*="一行/複数行"]').first();
   if (await multiLineBtn.isVisible()) {
     await multiLineBtn.click({ force: true });
     await page.waitForTimeout(500);
+    console.log('複数行入力モードに切り替えました！');
   }
 
   const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
@@ -102,12 +103,12 @@ chromium.use(stealth);
     }
   };
 
-  // 入室時のバイリンガル挨拶（\n の場所で綺麗に2行に改行されます！）
+  // 入室時のバイリンガル挨拶（今度は1つの吹き出しの中で綺麗に2行改行されます！）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
 
   // ==========================================
-  // 5. 常駐監視ループ（testキュー＋bye管理者判定のみ）
+  // 5. 常駐監視ループ（testキュー＋bye管理者判定）
   // ==========================================
   console.log('監視モード開始！コマンドを待機します...');
 
@@ -144,8 +145,9 @@ chromium.use(stealth);
     const byePosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye'));
     if (byePosts.length > prevByeCount) {
       prevByeCount = byePosts.length;
-      const latestByePost = byePosts.at(0);
+      const latestByePost = byePosts.at(0) || '';
 
+      // 個人トリップ「tetrio」が含まれていれば管理者本人と判定！
       const hasValidTrip = latestByePost.includes('tetrio');
 
       if (hasValidTrip) {
