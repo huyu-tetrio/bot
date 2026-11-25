@@ -67,43 +67,55 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★半角スラッシュ「一行/複数行 入力切替」を確実に押す！
-  const multiLineBtn = page.locator('[title*="一行/複数行"], [data-original-title*="一行/複数行"], [aria-label*="一行/複数行"]').first();
-  if (await multiLineBtn.isVisible()) {
-    await multiLineBtn.click({ force: true });
-    await page.waitForTimeout(500);
-    console.log('複数行入力モードに切り替えました！');
-  }
+  // ★ 入力欄のすぐ近くにある「一行/複数行」切替ボタンを探して押す
+  const initialInput = page.getByPlaceholder(/発言内容を入力/).first();
+  const toggleMultiLine = async () => {
+    const byAttr = page.locator('[title*="行"], [data-original-title*="行"], [aria-label*="行"], [title*="切替"], [title*="モード"]').first();
+    if (await byAttr.isVisible()) {
+      await byAttr.click({ force: true });
+      await page.waitForTimeout(500);
+      console.log('属性一致で複数行モードに切り替えました！');
+      return;
+    }
 
-  const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
+    const inputParent = initialInput.locator('xpath=..');
+    const neighborBtn = inputParent.locator('button, a, [role="button"], i, span[onclick]').first();
+    if (await neighborBtn.isVisible()) {
+      await neighborBtn.click({ force: true });
+      await page.waitForTimeout(500);
+      console.log('入力欄の隣のボタンをクリックして切り替えを試みました！');
+    }
+  };
 
-  // ★ \n を本物の改行（Enterキー）に変換して送信する関数
+  await toggleMultiLine();
+
+  // ★ 複数行モード（textarea）で確実に改行して送信する関数
   const sendChat = async (text) => {
-    await chatInput.fill('', { force: true });
+    const activeInput = page.getByPlaceholder(/発言内容を入力/).first();
+    await activeInput.fill('', { force: true });
 
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].length > 0) {
-        await chatInput.type(lines[i]);
+        await activeInput.type(lines[i]);
       }
       if (i < lines.length - 1) {
-        await chatInput.press('Enter');
+        await activeInput.press('Enter');
+        await page.waitForTimeout(200);
       }
     }
 
     await page.waitForTimeout(300);
-    await chatInput.press('Shift+Enter');
-    await page.waitForTimeout(300);
 
-    if ((await chatInput.inputValue()).length > 0) {
-      const postBtn = page.getByRole('button', { name: '投稿' }).first();
-      if (await postBtn.isVisible()) {
-        await postBtn.click({ force: true });
-      }
+    const postBtn = page.getByRole('button', { name: '投稿' }).first();
+    if (await postBtn.isVisible()) {
+      await postBtn.click({ force: true });
+    } else {
+      await activeInput.press('Shift+Enter');
     }
   };
 
-  // 入室時のバイリンガル挨拶（今度は1つの吹き出しの中で綺麗に2行改行されます！）
+  // 入室時のバイリンガル挨拶（1つの吹き出しの中で2行改行されます！）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
 
