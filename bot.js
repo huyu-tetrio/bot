@@ -19,7 +19,7 @@ chromium.use(stealth);
   // 0. 正しいログインURL「www.x-feeder.info/account/login.php」でHuyuBotアカウントにログイン
   if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
     console.log('HuyuBotアカウントでログインを試みます...');
-    await page.goto('https://www.x-feeder.info/account/login.php', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://x-feeder.info', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(4000);
 
     const emailInput = page.locator('input[type="text"]:visible, input[type="email"]:visible').first();
@@ -67,22 +67,33 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★ここを追加！左上の「一行／複数行 入力切替」ボタンを押して改行(\n)を有効化！
+  // 左上の「一行／複数行 入力切替」ボタンを押して改行モードにする
   const multiLineBtn = page.locator('[title*="一行／複数行"], [title*="入力切替"]').first();
   if (await multiLineBtn.isVisible()) {
     await multiLineBtn.click({ force: true });
     await page.waitForTimeout(500);
-    console.log('複数行入力モードに切り替えました！');
   }
 
   const chatInput = page.getByPlaceholder(/発言内容を入力/).first();
 
-  // メッセージ送信用の共通関数（複数行モードなので常に Shift+Enter または 投稿ボタン で送信）
+  // ★ \n を本物の改行（Enterキー）に変換して送信する関数
   const sendChat = async (text) => {
-    await chatInput.fill(text, { force: true });
+    await chatInput.fill('', { force: true });
+
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].length > 0) {
+        await chatInput.type(lines[i]);
+      }
+      if (i < lines.length - 1) {
+        await chatInput.press('Enter');
+      }
+    }
+
     await page.waitForTimeout(300);
     await chatInput.press('Shift+Enter');
     await page.waitForTimeout(300);
+
     if ((await chatInput.inputValue()).length > 0) {
       const postBtn = page.getByRole('button', { name: '投稿' }).first();
       if (await postBtn.isVisible()) {
@@ -91,16 +102,15 @@ chromium.use(stealth);
     }
   };
 
-  // 入室時のバイリンガル挨拶（複数行モードなので \n でしっかり2行改行される！）
+  // 入室時のバイリンガル挨拶（\n の場所で綺麗に2行に改行されます！）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
 
   // ==========================================
-  // 5. 常駐監視ループ（testキュー＋bye管理者判定）
+  // 5. 常駐監視ループ（testキュー＋bye管理者判定のみ）
   // ==========================================
   console.log('監視モード開始！コマンドを待機します...');
 
-  // 画面上の投稿を「1投稿＝1要素」で重複なく取得する関数
   const getPosts = async () => {
     return await page.evaluate(() => {
       const allDivs = Array.from(document.querySelectorAll('div, li, tr'));
@@ -118,7 +128,6 @@ chromium.use(stealth);
     });
   };
 
-  // 入室前から画面にある投稿数を記録（過去ログ反応防止）
   const initialPosts = await getPosts();
   let prevTestCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test')).length;
   let prevByeCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye')).length;
@@ -126,7 +135,6 @@ chromium.use(stealth);
   let pendingReplies = 0;
   let cooldownStartTime = 0;
 
-  // 30分間ループ
   const endTime = Date.now() + 30 * 60 * 1000;
 
   while (Date.now() < endTime) {
@@ -138,7 +146,6 @@ chromium.use(stealth);
       prevByeCount = byePosts.length;
       const latestByePost = byePosts.at(0);
 
-      // 個人トリップ「tetrio」が含まれていれば管理者本人と判定！
       const hasValidTrip = latestByePost.includes('tetrio');
 
       if (hasValidTrip) {
@@ -171,7 +178,6 @@ chromium.use(stealth);
       cooldownStartTime = pendingReplies > 0 ? Date.now() : 0;
     }
 
-    // 規約とサーバーに優しい2.5秒間隔で監視
     await page.waitForTimeout(2500);
   }
 
