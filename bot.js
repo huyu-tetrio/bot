@@ -2,6 +2,323 @@ const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 chromium.use(stealth);
 
+// ==========================================
+// 1. データ定義（地方・都道府県・座標・テトくじ・絵文字）
+// ==========================================
+
+const WEATHER_REGIONS = {
+  '北海道': ['札幌市', '稚内市', '福島町', '陸別町', 'えりも町', '中標津町'],
+  '東北': ['青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県'],
+  '関東': ['茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県'],
+  '中部': ['新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県', '静岡県', '愛知県'],
+  '近畿': ['三重県', '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県'],
+  '中国': ['鳥取県', '島根県', '岡山県', '広島県', '山口県'],
+  '四国': ['徳島県', '香川県', '愛媛県', '高知県'],
+  '九州': ['福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県'],
+  '沖縄': ['沖縄県']
+};
+
+const PREF_CAPITALS = {
+  '青森県': '青森市', '岩手県': '盛岡市', '宮城県': '仙台市', '秋田県': '秋田市', '山形県': '山形市', '福島県': '福島市',
+  '茨城県': '水戸市', '栃木県': '宇都宮市', '群馬県': '前橋市', '埼玉県': 'さいたま市', '千葉県': '千葉市', '東京都': '新宿区', '神奈川県': '横浜市',
+  '新潟県': '新潟市', '富山県': '富山市', '石川県': '金沢市', '福井県': '福井市', '山梨県': '甲府市', '長野県': '長野市', '岐阜県': '岐阜市', '静岡県': '静岡市', '愛知県': '名古屋市',
+  '三重県': '津市', '滋賀県': '大津市', '京都府': '京都市', '大阪府': '大阪市', '兵庫県': '神戸市', '奈良県': '奈良市', '和歌山県': '和歌山市',
+  '鳥取県': '鳥取市', '島根県': '松江市', '岡山県': '岡山市', '広島県': '広島市', '山口県': '山口市',
+  '徳島県': '徳島市', '香川県': '高松市', '愛媛県': '松山市', '高知県': '高知市',
+  '福岡県': '福岡市', '佐賀県': '佐賀市', '長崎県': '長崎市', '熊本県': '熊本市', '大分県': '大分市', '宮崎県': '宮崎市', '鹿児島県': '鹿児島市', '沖縄県': '那覇市'
+};
+
+// ここでわける（第1弾終了）
+const WEATHER_LOCATIONS = {
+  '札幌市': { label: '北海道 札幌市', lat: 43.0642, lon: 141.3469 },
+  '稚内市': { label: '北海道 稚内市', lat: 45.4156, lon: 141.6731 },
+  '福島町': { label: '北海道 福島町', lat: 41.4819, lon: 140.2519 },
+  '陸別町': { label: '北海道 陸別町', lat: 43.4678, lon: 143.7431 },
+  'えりも町': { label: '北海道 えりも町', lat: 42.0167, lon: 143.1500 },
+  '中標津町': { label: '北海道 中標津町', lat: 43.5539, lon: 144.9711 },
+  '青森県': { label: '青森県（青森市）', lat: 40.8244, lon: 140.7400 },
+  '青森市': { label: '青森県 青森市', lat: 40.8244, lon: 140.7400 },
+  '岩手県': { label: '岩手県（盛岡市）', lat: 39.7036, lon: 141.1525 },
+  '盛岡市': { label: '岩手県 盛岡市', lat: 39.7036, lon: 141.1525 },
+  '宮城県': { label: '宮城県（仙台市）', lat: 38.2689, lon: 140.8719 },
+  '仙台市': { label: '宮城県 仙台市', lat: 38.2689, lon: 140.8719 },
+  '秋田県': { label: '秋田県（秋田市）', lat: 39.7186, lon: 140.1025 },
+  '秋田市': { label: '秋田県 秋田市', lat: 39.7186, lon: 140.1025 },
+  '山形県': { label: '山形県（山形市）', lat: 38.2406, lon: 140.3633 },
+  '山形市': { label: '山形県 山形市', lat: 38.2406, lon: 140.3633 },
+  '福島県': { label: '福島県（福島市）', lat: 37.7500, lon: 140.4678 },
+  '福島市': { label: '福島県 福島市', lat: 37.7500, lon: 140.4678 },
+  '茨城県': { label: '茨城県（水戸市）', lat: 36.3414, lon: 140.4467 },
+  '水戸市': { label: '茨城県 水戸市', lat: 36.3414, lon: 140.4467 },
+  '栃木県': { label: '栃木県（宇都宮市）', lat: 36.5658, lon: 139.8836 },
+  '宇都宮市': { label: '栃木県 宇都宮市', lat: 36.5658, lon: 139.8836 },
+  '群馬県': { label: '群馬県（前橋市）', lat: 36.3911, lon: 139.0608 },
+  '前橋市': { label: '群馬県 前橋市', lat: 36.3911, lon: 139.0608 },
+  '埼玉県': { label: '埼玉県（さいたま市）', lat: 35.8569, lon: 139.6489 },
+  'さいたま市': { label: '埼玉県 さいたま市', lat: 35.8569, lon: 139.6489 },
+  '千葉県': { label: '千葉県（千葉市）', lat: 35.6047, lon: 140.1233 },
+  '千葉市': { label: '千葉県 千葉市', lat: 35.6047, lon: 140.1233 },
+  '東京都': { label: '東京都（新宿区）', lat: 35.6895, lon: 139.6917 },
+  '新宿区': { label: '東京都 新宿区', lat: 35.6895, lon: 139.6917 },
+  '神奈川県': { label: '神奈川県（横浜市）', lat: 35.4478, lon: 139.6425 },
+  '横浜市': { label: '神奈川県 横浜市', lat: 35.4478, lon: 139.6425 },
+  '新潟県': { label: '新潟県（新潟市）', lat: 37.9022, lon: 139.0236 },
+  '新潟市': { label: '新潟県 新潟市', lat: 37.9022, lon: 139.0236 },
+  '富山県': { label: '富山県（富山市）', lat: 36.6953, lon: 137.2114 },
+  '富山市': { label: '富山県 富山市', lat: 36.6953, lon: 137.2114 },
+  '石川県': { label: '石川県（金沢市）', lat: 36.5944, lon: 136.6256 },
+  '金沢市': { label: '石川県 金沢市', lat: 36.5944, lon: 136.6256 },
+  '福井県': { label: '福井県（福井市）', lat: 36.0653, lon: 136.2219 },
+  '福井市': { label: '福井県 福井市', lat: 36.0653, lon: 136.2219 },
+  '山梨県': { label: '山梨県（甲府市）', lat: 35.6639, lon: 138.5683 },
+  '甲府市': { label: '山梨県 甲府市', lat: 35.6639, lon: 138.5683 },
+  '長野県': { label: '長野県（長野市）', lat: 36.6514, lon: 138.1811 },
+  '長野市': { label: '長野県 長野市', lat: 36.6514, lon: 138.1811 },
+  '岐阜県': { label: '岐阜県（岐阜市）', lat: 35.3911, lon: 136.7222 },
+  '岐阜市': { label: '岐阜県 岐阜市', lat: 35.3911, lon: 136.7222 },
+  '静岡県': { label: '静岡県（静岡市）', lat: 34.9769, lon: 138.3831 },
+  '静岡市': { label: '静岡県 静岡市', lat: 34.9769, lon: 138.3831 },
+  '愛知県': { label: '愛知県（名古屋市）', lat: 35.1803, lon: 136.9067 },
+  '名古屋市': { label: '愛知県 名古屋市', lat: 35.1803, lon: 136.9067 },
+  '三重県': { label: '三重県（津市）', lat: 34.7303, lon: 136.5086 },
+  '津市': { label: '三重県 津市', lat: 34.7303, lon: 136.5086 },
+  '滋賀県': { label: '滋賀県（大津市）', lat: 35.0044, lon: 135.8683 },
+  '大津市': { label: '滋賀県 大津市', lat: 35.0044, lon: 135.8683 },
+  '京都府': { label: '京都府（京都市）', lat: 35.0214, lon: 135.7556 },
+  '京都市': { label: '京都府 京都市', lat: 35.0214, lon: 135.7556 },
+  '大阪府': { label: '大阪府（大阪市）', lat: 34.6864, lon: 135.5200 },
+  '大阪市': { label: '大阪府 大阪市', lat: 34.6864, lon: 135.5200 },
+  '兵庫県': { label: '兵庫県（神戸市）', lat: 34.6914, lon: 135.1831 },
+  '神戸市': { label: '兵庫県 神戸市', lat: 34.6914, lon: 135.1831 },
+  '奈良県': { label: '奈良県（奈良市）', lat: 34.6853, lon: 135.8328 },
+  '奈良市': { label: '奈良県 奈良市', lat: 34.6853, lon: 135.8328 },
+  '和歌山県': { label: '和歌山県（和歌山市）', lat: 34.2261, lon: 135.1675 },
+  '和歌山市': { label: '和歌山県 和歌山市', lat: 34.2261, lon: 135.1675 },
+  '鳥取県': { label: '鳥取県（鳥取市）', lat: 35.5036, lon: 134.2383 },
+  '鳥取市': { label: '鳥取県 鳥取市', lat: 35.5036, lon: 134.2383 },
+  '島根県': { label: '島根県（松江市）', lat: 35.4722, lon: 133.0506 },
+  '松江市': { label: '島根県 松江市', lat: 35.4722, lon: 133.0506 },
+  '岡山県': { label: '岡山県（岡山市）', lat: 34.6617, lon: 133.9350 },
+  '岡山市': { label: '岡山県 岡山市', lat: 34.6617, lon: 133.9350 },
+  '広島県': { label: '広島県（広島市）', lat: 34.3964, lon: 132.4594 },
+  '広島市': { label: '広島県 広島市', lat: 34.3964, lon: 132.4594 },
+  '山口県': { label: '山口県（山口市）', lat: 34.1858, lon: 131.4714 },
+  '山口市': { label: '山口県 山口市', lat: 34.1858, lon: 131.4714 },
+  '徳島県': { label: '徳島県（徳島市）', lat: 34.0658, lon: 134.5594 },
+  '徳島市': { label: '徳島県 徳島市', lat: 34.0658, lon: 134.5594 },
+  '香川県': { label: '香川県（高松市）', lat: 34.3403, lon: 134.0433 },
+  '高松市': { label: '香川県 高松市', lat: 34.3403, lon: 134.0433 },
+  '愛媛県': { label: '愛媛県（松山市）', lat: 33.8417, lon: 132.7661 },
+  '松山市': { label: '愛媛県 松山市', lat: 33.8417, lon: 132.7661 },
+  '高知県': { label: '高知県（高知市）', lat: 33.5597, lon: 133.5311 },
+  '高知市': { label: '高知県 高知市', lat: 33.5597, lon: 133.5311 },
+  '福岡県': { label: '福岡県（福岡市）', lat: 33.6064, lon: 130.4181 },
+  '福岡市': { label: '福岡県 福岡市', lat: 33.6064, lon: 130.4181 },
+  '佐賀県': { label: '佐賀県（佐賀市）', lat: 33.2494, lon: 130.2989 },
+  '佐賀市': { label: '佐賀県 佐賀市', lat: 33.2494, lon: 130.2989 },
+  '長崎県': { label: '長崎県（長崎市）', lat: 32.7447, lon: 129.8736 },
+  '長崎市': { label: '長崎県 長崎市', lat: 32.7447, lon: 129.8736 },
+  '熊本県': { label: '熊本県（熊本市）', lat: 32.7897, lon: 130.7417 },
+  '熊本市': { label: '熊本県 熊本市', lat: 32.7897, lon: 130.7417 },
+  '大分県': { label: '大分県（大分市）', lat: 33.2381, lon: 131.6125 },
+  '大分市': { label: '大分県 大分市', lat: 33.2381, lon: 131.6125 },
+  '宮崎県': { label: '宮崎県（宮崎市）', lat: 31.9111, lon: 131.4239 },
+  '宮崎市': { label: '宮崎県 宮崎市', lat: 31.9111, lon: 131.4239 },
+  '鹿児島県': { label: '鹿児島県（鹿児島市）', lat: 31.5603, lon: 130.5581 },
+  '鹿児島市': { label: '鹿児島県 鹿児島市', lat: 31.5603, lon: 130.5581 },
+  '沖縄県': { label: '沖縄県（那覇市）', lat: 26.2125, lon: 127.6811 },
+  '那覇市': { label: '沖縄県 那覇市', lat: 26.2125, lon: 127.6811 }
+};
+
+// ここでわける（第2弾終了）
+const TETOKUJI_LIST = [
+  {
+    weight: 0.3,
+    text: '【隠れ超大吉】Oミノを回し続けたら溶けてIミノの形になってるかも\nあなたをミノで例えると？「溶けるOミノ」'
+  },
+  {
+    weight: 2.3,
+    text: '【隠れ大吉】途中でPCが取れるかも・・・！\nあなたをミノで例えると？「7ミノぜんぶ」'
+  },
+  {
+    weight: 5.4,
+    text: '【超特大吉】TSDとTSTがたくさん、大火力を出せるかも\nあなたをミノで例えると「Tミノ」'
+  },
+  {
+    weight: 9.0,
+    text: '【超大吉】Iミノがテンポ良くたくさん来て中火力を出せるかも？\nあなたをミノで例えると「Iミノ」'
+  },
+  {
+    weight: 12.0,
+    text: '【大吉】ちょうどいいところに2マスの平らな地形があるかも\nあなたをミノで例えると？「Oミノ」'
+  },
+  {
+    weight: 14.0,
+    text: '【中吉】Zミノが2~3連続（ホールド含む）でめちゃ高い4列ができるかも\nあなたをミノで例えると「Zミノ」'
+  },
+  {
+    weight: 21.0,
+    text: '【吉】ちょうど6combo以上ができる4列ができてるかも\nあなたをミノで例えると？「Sミノ」'
+  },
+  {
+    weight: 11.0,
+    text: '【小吉】あと1ピースで高さ4マスの穴ができたらIミノがちょうどくるかも\nあなたをミノで例えると？「Jミノ」'
+  },
+  {
+    weight: 10.0,
+    text: '【未吉】ホールドに来てほしいミノがたくさん来て火力を出せるかも\nあなたをミノで例えると？「Lミノ」'
+  },
+  {
+    weight: 7.0,
+    text: '【凶】SミノとZミノが連続で来てどこに置けばいいのかわからなくなっちゃう\nあなたをミノで例えると?「うねうね正反対なミノ」\n一言アドバイス:Tミノが埋まる地形を作っていれば綺麗にできるかも'
+  },
+  {
+    weight: 5.0,
+    text: '【大凶】ピンチな状態でミスってゲームオーバーになるかも・・・?\nあなたをミノで例えると?「急ぎすぎなテトリミノ」\n一言アドバイス:慎重にスピードを下げて掘ろう'
+  },
+  {
+    weight: 3.0,
+    text: '【極大凶】地形がぐちゃぐちゃになってゲームオーバーになるかも・・・\nあなたをミノで例えると?「想定していない場所へ進むIミノ」\n一言アドバイス:運も実力のうち'
+  }
+];
+
+const EMOJI_POOL = [
+  '🛸', '🕊️', '❓', '🎉', '🔥', '✨', '🌈', '🍀', '💎', '🎮',
+  '🧩', '🚀', '⭐', '🌙', '☀️', '☔', '⚡', '❄️', '🐱', '🐶',
+  '🐧', '🦊', '🐼', '🐸', '🍕', '🍣', '🍜', '🍰', '☕', '🎵',
+  '💡', '📢', '🏆', '🎯', '🎲', '💥', '💤', '👀', '👍', '🙏'
+];
+
+// ==========================================
+// 2. ユーティリティ関数群
+// ==========================================
+
+const getJstNow = () => new Date(Date.now() + 9 * 60 * 60 * 1000);
+
+const formatJstDateTime = (jstDate) => {
+  const yyyy = jstDate.getUTCFullYear();
+  const mm = String(jstDate.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(jstDate.getUTCDate()).padStart(2, '0');
+  const hh = String(jstDate.getUTCHours()).padStart(2, '0');
+  const min = String(jstDate.getUTCMinutes()).padStart(2, '0');
+  const ss = String(jstDate.getUTCSeconds()).padStart(2, '0');
+  return yyyy + '/' + mm + '/' + dd + ' ' + hh + ':' + min + ':' + ss;
+};
+
+const buildTimeReport = () => {
+  const jst = getJstNow();
+  const yyyy = jst.getUTCFullYear();
+  const mm = String(jst.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(jst.getUTCDate()).padStart(2, '0');
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const w = weekdays.at(jst.getUTCDay());
+  const hh = String(jst.getUTCHours()).padStart(2, '0');
+  const min = String(jst.getUTCMinutes()).padStart(2, '0');
+  const ss = String(jst.getUTCSeconds()).padStart(2, '0');
+
+  const nowMs = jst.getTime();
+  const startOfDay = Date.UTC(yyyy, jst.getUTCMonth(), jst.getUTCDate(), 0, 0, 0);
+  const endOfDay = Date.UTC(yyyy, jst.getUTCMonth(), jst.getUTCDate() + 1, 0, 0, 0);
+  const dayPct = ((nowMs - startOfDay) / (endOfDay - startOfDay)) * 100;
+
+  const startOfMonth = Date.UTC(yyyy, jst.getUTCMonth(), 1, 0, 0, 0);
+  const endOfMonth = Date.UTC(yyyy, jst.getUTCMonth() + 1, 1, 0, 0, 0);
+  const monthPct = ((nowMs - startOfMonth) / (endOfMonth - startOfMonth)) * 100;
+
+  const startOfYear = Date.UTC(yyyy, 0, 1, 0, 0, 0);
+  const endOfYear = Date.UTC(yyyy + 1, 0, 1, 0, 0, 0);
+  const yearPct = ((nowMs - startOfYear) / (endOfYear - startOfYear)) * 100;
+  const remainingDays = Math.floor((endOfYear - nowMs) / (24 * 60 * 60 * 1000));
+
+  const makeBar = (pct) => {
+    const filled = Math.min(10, Math.max(0, Math.floor(pct / 10)));
+    return '■'.repeat(filled) + '□'.repeat(10 - filled);
+  };
+
+  return [
+    "現在は''" + yyyy + "/" + mm + "/" + dd + "''（" + w + "）　''" + hh + ":" + min + ":" + ss + "''",
+    "今年残りの日数はあと''" + remainingDays + "日''",
+    "今日 " + dayPct.toFixed(2) + "% " + makeBar(dayPct),
+    "今月 " + monthPct.toFixed(2) + "% " + makeBar(monthPct),
+    "今年 " + yearPct.toFixed(2) + "% " + makeBar(yearPct)
+  ].join('\n');
+};
+
+const drawTetokuji = () => {
+  const rand = Math.random() * 100;
+  let cumulative = 0;
+  for (const item of TETOKUJI_LIST) {
+    cumulative += item.weight;
+    if (rand < cumulative) {
+      return item.text;
+    }
+  }
+  return TETOKUJI_LIST.at(-1).text;
+};
+
+// ここでわける（第3弾終了）
+const weatherCodeToJa = (code) => {
+  if (code === 0) return '快晴';
+  if (code === 1 || code === 2) return '晴れ時々曇り';
+  if (code === 3) return '曇り';
+  if (code === 45 || code === 48) return '霧';
+  if (code >= 51 && code <= 57) return '霧雨';
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return '雨';
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return '雪';
+  if (code >= 95 && code <= 99) return '雷雨';
+  return '不明';
+};
+
+const fetchWeatherText = async (locKey) => {
+  const loc = WEATHER_LOCATIONS[locKey];
+  if (!loc) return null;
+
+  try {
+    const apiBase = 'https://' + '://open-meteo.com';
+    const url = apiBase + '?latitude=' + loc.lat + '&longitude=' + loc.lon + '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=2';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('APIエラー');
+    const data = await res.json();
+
+    const curTemp = (data.current && data.current.temperature_2m !== undefined) ? data.current.temperature_2m : '--';
+    const curWeather = weatherCodeToJa(data.current ? data.current.weather_code : -1);
+    const todayMax = (data.daily && data.daily.temperature_2m_max) ? data.daily.temperature_2m_max.at(0) : '--';
+    const todayMin = (data.daily && data.daily.temperature_2m_min) ? data.daily.temperature_2m_min.at(0) : '--';
+    const todayPop = (data.daily && data.daily.precipitation_probability_max) ? data.daily.precipitation_probability_max.at(0) : '--';
+    const tomorrowWeather = weatherCodeToJa((data.daily && data.daily.weather_code) ? data.daily.weather_code.at(1) : -1);
+    const tomorrowMax = (data.daily && data.daily.temperature_2m_max) ? data.daily.temperature_2m_max.at(1) : '--';
+    const tomorrowMin = (data.daily && data.daily.temperature_2m_min) ? data.daily.temperature_2m_min.at(1) : '--';
+
+    return [
+      '【' + loc.label + 'の天気】',
+      '現在：' + curWeather + '（' + curTemp + '℃）',
+      '今日：最高 ' + todayMax + '℃ / 最低 ' + todayMin + '℃（降水確率 ' + todayPop + '%）',
+      '明日：' + tomorrowWeather + '（最高 ' + tomorrowMax + '℃ / 最低 ' + tomorrowMin + '℃）'
+    ].join('\n');
+  } catch (e) {
+    return '【' + loc.label + 'の天気】\n天気データの取得に失敗しました。少し時間をおいて再度お試しください。';
+  }
+};
+
+const parseScheduleJstMs = (dateStr, timeStr) => {
+  const dMatch = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  const tMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dMatch || !tMatch) return null;
+
+  const year = Number(dMatch.at(1));
+  const month = Number(dMatch.at(2));
+  const day = Number(dMatch.at(3));
+  const hour = Number(tMatch.at(1));
+  const minute = Number(tMatch.at(2));
+
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+
+  return Date.UTC(year, month - 1, day, hour - 9, minute, 0);
+};
+
+// ==========================================
+// 3. メイン処理（ログイン・入室・送信準備）
+// ==========================================
 (async () => {
   const browser = await chromium.launch({
     headless: true,
@@ -16,7 +333,6 @@ chromium.use(stealth);
 
   const page = await context.newPage();
 
-  // 0. HuyuBotアカウントにログイン
   if (process.env.BOT_EMAIL && process.env.BOT_PASS) {
     console.log('HuyuBotアカウントでログインを試みます...');
     const loginUrl = 'https://' + 'www.x-feeder.info/account/login.php';
@@ -36,22 +352,19 @@ chromium.use(stealth);
     }
   }
 
-  // 1. 部屋にアクセス
-  const roomUrl = 'https://' + 'www1.x-feeder.info/huyu_praviteroom/';
+  const roomUrl = process.env.ROOM_URL || ('https://' + 'www1.x-feeder.info/huyu_praviteroom/');
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(5000);
 
-  // 2. 部屋のパスワードを入れて入室
   const roomPassInput = page.locator('input[type="password"]:visible').first();
   if (await roomPassInput.isVisible()) {
-    await roomPassInput.fill('HuyuTetr1s2o26');
+    await roomPassInput.fill(process.env.ROOM_PASS || '');
     await page.waitForTimeout(500);
     const loginForm = roomPassInput.locator('xpath=ancestor::form');
     await loginForm.locator('input[type="submit"], button').first().click();
     await page.waitForTimeout(6000);
   }
 
-  // 3. 未ログイン時のみ名前入力
   const nameInput = page.getByPlaceholder('名前を入力');
   if (await nameInput.isVisible()) {
     await nameInput.fill('huyubot test');
@@ -59,7 +372,6 @@ chromium.use(stealth);
     await page.waitForTimeout(8000);
   }
 
-  // 4. 初回チュートリアルを消す
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
   const skipBtn = page.locator('.introjs-skipbutton, .introjs-donebutton').first();
@@ -68,7 +380,6 @@ chromium.use(stealth);
     await page.waitForTimeout(500);
   }
 
-  // ★ 特定したID「#input_type」をクリックして複数行モード（#post_form_multi）へ切り替え！
   const multiInput = page.locator('#post_form_multi');
   if (!(await multiInput.isVisible())) {
     await page.locator('#input_type').click({ force: true });
@@ -76,7 +387,6 @@ chromium.use(stealth);
     console.log('複数行モード（#post_form_multi）に切り替えました！');
   }
 
-  // ★ #post_form_multi に改行入りで入力し、#post_btn で確実に送信する関数
   const sendChat = async (text) => {
     if (!(await multiInput.isVisible())) {
       await page.locator('#input_type').click({ force: true });
@@ -87,8 +397,9 @@ chromium.use(stealth);
 
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].length > 0) {
-        await multiInput.type(lines[i]);
+      const currentLine = lines.at(i) || '';
+      if (currentLine.length > 0) {
+        await multiInput.type(currentLine);
       }
       if (i < lines.length - 1) {
         await multiInput.press('Enter');
@@ -100,38 +411,19 @@ chromium.use(stealth);
     await page.locator('#post_btn').click({ force: true });
   };
 
-  // ★ 日本時間（JST）の「YYYY/MM/DD HH:MM:SS」を作る関数
-  const getJstDateTime = () => {
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    const yyyy = now.getUTCFullYear();
-    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(now.getUTCDate()).padStart(2, '0');
-    const hh = String(now.getUTCHours()).padStart(2, '0');
-    const min = String(now.getUTCMinutes()).padStart(2, '0');
-    const ss = String(now.getUTCSeconds()).padStart(2, '0');
-    return `${yyyy}/${mm}/${dd} ${hh}:${min}:${ss}`;
-  };
-
-  // ★ 投稿テキストの中から「発言者の名前」を抜き出す関数
+  // ここでわける（第4弾終了）
   const extractSenderName = (postText) => {
     const lines = postText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     for (const line of lines) {
-      if (line === 'huyubot/test') continue;
-      if (/^\d+$/.test(line)) continue;
-      if (line.includes('huyubot/test')) continue;
+      if (line.startsWith('huyubot/') || /^\d+$/.test(line) || line.includes('huyubot/')) continue;
       return line;
     }
     return '名無し';
   };
 
-  // 入室時のバイリンガル挨拶（1つの吹き出しの中で綺麗に2行改行されます！）
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
-
-  // ==========================================
-  // 5. 常駐監視ループ（testキュー＋bye管理者判定）
-  // ==========================================
-  console.log('監視モード開始！コマンドを待機します...');
+  console.log('Huyubot Version 1.0.0 監視モード開始！');
 
   const getPosts = async () => {
     return await page.evaluate(() => {
@@ -139,75 +431,119 @@ chromium.use(stealth);
       const postBlocks = allDivs.filter(el => {
         const txt = el.innerText || '';
         const timeMatches = txt.match(/\d{2}:\d{2}:\d{2}/g);
-        return timeMatches && timeMatches.length === 1 && txt.length < 400;
+        return timeMatches && timeMatches.length === 1 && txt.length < 500;
       });
-
-      const uniquePosts = postBlocks.filter((el, _, arr) => {
-        return !arr.some(other => other !== el && other.contains(el) && other.innerText.includes('\n'));
-      });
-
-      return uniquePosts.map(el => el.innerText.trim());
+      return postBlocks.filter((el, _, arr) => !arr.some(o => o !== el && o.contains(el) && o.innerText.includes('\n'))).map(el => el.innerText.trim());
     });
   };
 
+  const extractCommandLine = (postText) => postText.split('\n').map(l => l.trim()).find(l => l === 'huyubot' || l.startsWith('huyubot/')) || null;
+
   const initialPosts = await getPosts();
-  let prevTestCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test')).length;
-  let prevByeCount = initialPosts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye')).length;
+  let seenCommandCount = initialPosts.filter(t => extractCommandLine(t) !== null).length;
 
-  // 誰がtestを打ったかを順番に覚えておくキュー（配列）
-  const testQueue = [];
+  const replyQueue = [];
   let cooldownStartTime = 0;
-
-  const endTime = Date.now() + 30 * 60 * 1000;
+  const scheduledPosts = [];
+  const adminTrip = process.env.ADMIN_TRIP || 'tetrio';
+  const endTime = Date.now() + 350 * 60 * 1000;
 
   while (Date.now() < endTime) {
     const posts = await getPosts();
+    const commandPosts = posts.filter(t => extractCommandLine(t) !== null);
 
-    // --- A. 「huyubot/bye」のチェック（最優先） ---
-    const byePosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/bye'));
-    if (byePosts.length > prevByeCount) {
-      prevByeCount = byePosts.length;
-      const latestByePost = byePosts.at(0) || '';
+    if (commandPosts.length > seenCommandCount) {
+      const added = commandPosts.length - seenCommandCount;
+      seenCommandCount = commandPosts.length;
 
-      // 個人トリップ「tetrio」が含まれていれば管理者本人と判定！
-      const hasValidTrip = latestByePost.includes('tetrio');
-
-      if (hasValidTrip) {
-        console.log('管理者本人からの bye コマンドを確認！退室します。');
-        await sendChat('I am removing the bot; this may take a moment. Goodbye.');
-        await page.waitForTimeout(2000);
-        break;
-      } else {
-        console.log('権限のないユーザーからの bye コマンドを拒否しました。');
-        await sendChat('You are not an administrator or a designated person.');
-      }
-    }
-
-    // --- B. 「huyubot/test」のチェック（10秒クールタイム＋発言者記録キュー） ---
-    const testPosts = posts.filter(t => t.split('\n').some(line => line.trim() === 'huyubot/test'));
-    if (testPosts.length > prevTestCount) {
-      const added = testPosts.length - prevTestCount;
-      prevTestCount = testPosts.length;
-
-      if (testQueue.length === 0 && cooldownStartTime === 0) {
-        cooldownStartTime = Date.now();
-      }
-
-      // 新しく増えた投稿（上から順に新しい）から発言者の名前を取り出してキューに入れる
       for (let i = added - 1; i >= 0; i--) {
-        const sender = extractSenderName(testPosts[i] || '');
-        testQueue.push(sender);
+        const fullPost = commandPosts.at(i) || '';
+        const cmdLine = extractCommandLine(fullPost);
+        if (!cmdLine) continue;
+
+        const sender = extractSenderName(fullPost);
+        const isAdmin = fullPost.includes(adminTrip);
+        const parts = cmdLine.replace(/\/+$/, '').split('/');
+        const sub = parts.at(1) || '';
+
+        if (sub === 'bye') {
+          if (isAdmin) {
+            await sendChat('I am removing the bot; this may take a moment. Goodbye.');
+            await page.waitForTimeout(2000);
+            await browser.close();
+            return;
+          }
+          replyQueue.push('You are not an administrator or a designated person.');
+        } else if (sub === 'test') {
+          replyQueue.push('この投稿はテストです\nThis is a test post.\n' + sender + ' ' + formatJstDateTime(getJstNow()));
+        } else if (sub === 'help') {
+          replyQueue.push('【Huyubot コマンド一覧】\n・huyubot/help : コマンド一覧\n・huyubot/test : 動作確認テスト\n・huyubot/weather : 全国天気予報\n・huyubot/tetokuji : テトくじ（全12種）\n・huyubot/emoji または /emoji/1~20 : ランダム絵文字\n・huyubot/time : 現在時刻と今年の経過率\n・huyubot/about / huyubot/ver : Bot情報\n・huyubot/say / huyubot/bye : 管理者専用');
+        } else if (sub === 'ver') {
+          replyQueue.push('Huyubot Version 1.0.0');
+        } else if (sub === 'about') {
+          replyQueue.push('【About Huyubot】\nName: feeder huyubot (Version 1.0.0)\nCreator: huyu_\n天気予報・テトくじ・時刻ゲージなどを搭載したチャットBotです！');
+        } else if (sub === 'time') {
+          replyQueue.push(buildTimeReport());
+        } else if (sub === 'tetokuji') {
+          replyQueue.push('【' + sender + ' さんのテトくじ結果】\n' + drawTetokuji());
+        } else if (sub === 'emoji') {
+          let count = 3;
+          if (parts.at(2) !== undefined) {
+            const parsed = Number(parts.at(2));
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 20) {
+              replyQueue.push('個数は 1〜20 の数字で指定してください。（例：huyubot/emoji/5）');
+              continue;
+            }
+            count = parsed;
+          }
+          const picked = [];
+          for (let k = 0; k < count; k++) picked.push(EMOJI_POOL.at(Math.floor(Math.random() * EMOJI_POOL.length)));
+          replyQueue.push(picked.join(' '));
+        } else if (sub === 'say') {
+          if (!isAdmin) {
+            replyQueue.push('You are not an administrator or a designated person.');
+          } else if (parts.length >= 5) {
+            const targetUtcMs = parseScheduleJstMs(parts.at(2), parts.at(3));
+            const msgPart = parts.slice(4).join('/');
+            if (!targetUtcMs) replyQueue.push('形式エラー：huyubot/say/YYYY-MM-DD/HH:MM/文字 の形式で指定してください。');
+            else if (msgPart.startsWith('huyubot/')) replyQueue.push('コマンド文字列は予約できません。');
+            else if (targetUtcMs <= Date.now()) replyQueue.push('過去の時刻は指定できません。未来の日本時間を指定してください。');
+            else if (targetUtcMs > endTime) replyQueue.push('連続稼働上限（約5時間50分後）より先の時刻は予約できません。');
+            else {
+              scheduledPosts.push({ targetMs: targetUtcMs, text: msgPart });
+              replyQueue.push('予約を受け付けました！\n予定日時：' + parts.at(2) + ' ' + parts.at(3) + '（JST）');
+            }
+          } else if (parts.length === 3 && (parts.at(2) || '').length > 0 && !parts.at(2).startsWith('huyubot/')) {
+            replyQueue.push(parts.at(2));
+          } else {
+            replyQueue.push('使い方：huyubot/say/2026-11-26/23:10/喋らせたい文字');
+          }
+        } else if (sub === 'weather') {
+          const arg1 = parts.at(2) || '';
+          const arg2 = parts.at(3) || '';
+          const targetLoc = arg2 || arg1;
+          if (!arg1) replyQueue.push('【天気予報：地方を選択してください】\n' + Object.keys(WEATHER_REGIONS).join('・') + '\n例：huyubot/weather/関東');
+          else if (WEATHER_REGIONS[arg1] && !arg2) replyQueue.push('【' + arg1 + '地方のエリア一覧】\n' + WEATHER_REGIONS[arg1].join('・') + '\n例：huyubot/weather/' + WEATHER_REGIONS[arg1].at(0));
+          else if (PREF_CAPITALS[targetLoc] && !arg2) replyQueue.push('※' + targetLoc + 'の県庁所在地（' + PREF_CAPITALS[targetLoc] + '）の天気を表示します\n' + (await fetchWeatherText(targetLoc)));
+          else if (WEATHER_LOCATIONS[targetLoc]) replyQueue.push(await fetchWeatherText(targetLoc));
+          else replyQueue.push('指定された地域「' + targetLoc + '」は見つかりませんでした。\n「huyubot/weather」で一覧を確認してください。');
+        }
       }
-      console.log(`testコマンド検知！(＋${added}回 / 待機数: ${testQueue.length}回)`);
+      if (replyQueue.length > 0 && cooldownStartTime === 0) cooldownStartTime = Date.now();
     }
 
-    if (testQueue.length > 0 && Date.now() - cooldownStartTime >= 10000) {
-      const targetUser = testQueue.shift();
-      const dateTimeStr = getJstDateTime();
-      console.log(`10秒経過！test返信を実行します（対象: ${targetUser}）`);
+    for (let i = scheduledPosts.length - 1; i >= 0; i--) {
+      const item = scheduledPosts.at(i);
+      if (item && Date.now() >= item.targetMs) {
+        scheduledPosts.splice(i, 1);
+        await sendChat(item.text);
+        await page.waitForTimeout(1000);
+      }
+    }
 
-      await sendChat(`この投稿はテストです\nThis is a test post.\n${targetUser} ${dateTimeStr}`);
-      cooldownStartTime = testQueue.length > 0 ? Date.now() : 0;
+    if (replyQueue.length > 0 && Date.now() - cooldownStartTime >= 10000) {
+      await sendChat(replyQueue.shift());
+      cooldownStartTime = replyQueue.length > 0 ? Date.now() : 0;
     }
 
     await page.waitForTimeout(2500);
