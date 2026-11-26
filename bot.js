@@ -423,7 +423,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
 
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
-  console.log('Huyubot Version 1.0.0 監視モード開始！');
+  console.log('Huyubot Version 1.0.0 監視モード開始');
 
   const getPosts = async () => {
     return await page.evaluate(() => {
@@ -445,8 +445,8 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
   const replyQueue = [];
   let cooldownStartTime = 0;
   const scheduledPosts = [];
-  const adminTrip = process.env.ADMIN_TRIP || 'tetrio';
-  const endTime = Date.now() + 4.5 * 60 * 1000;
+  const adminTrip = process.env.ADMIN_TRIP;
+  const endTime = Date.now() + 355 * 60 * 1000;
 
   while (Date.now() < endTime) {
     const posts = await getPosts();
@@ -468,7 +468,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
 
         if (sub === 'bye') {
           if (isAdmin) {
-            await sendChat('I am removing the bot; this may take a moment. Goodbye.');
+            await sendChat('I am removing the bot, this may take a moment. Goodbye.');
             await page.waitForTimeout(2000);
             await browser.close();
             return;
@@ -477,11 +477,11 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
         } else if (sub === 'test') {
           replyQueue.push('この投稿はテストです\nThis is a test post.\n' + sender + ' ' + formatJstDateTime(getJstNow()));
         } else if (sub === 'help') {
-          replyQueue.push('【Huyubot コマンド一覧】\n・huyubot/help : コマンド一覧\n・huyubot/test : 動作確認テスト\n・huyubot/weather : 全国天気予報\n・huyubot/tetokuji : テトくじ（全12種）\n・huyubot/emoji または /emoji/1~20 : ランダム絵文字\n・huyubot/time : 現在時刻と今年の経過率\n・huyubot/about / huyubot/ver : Bot情報\n・huyubot/say / huyubot/bye : 管理者専用');
+          replyQueue.push('【Huyubot コマンド一覧】\n・huyubot/help : コマンド一覧\n・huyubot/test\n・huyubot/weather\n・huyubot/tetokuji\n・huyubot/emoji　（/1~20）\n・huyubot/time\n・huyubot/about\n・huyubot/ver\n・huyubot/say\n・huyubot/bye（管理者専用）');
         } else if (sub === 'ver') {
           replyQueue.push('Huyubot Version 1.0.0');
         } else if (sub === 'about') {
-          replyQueue.push('【About Huyubot】\nName: feeder huyubot (Version 1.0.0)\nCreator: huyu_\n天気予報・テトくじ・時刻ゲージなどを搭載したチャットBotです！');
+          replyQueue.push('【About Huyubot】\nName: feeder huyubot (Version 0.0.0)\nCreator: huyu_\nチャットBotです！');
         } else if (sub === 'time') {
           replyQueue.push(buildTimeReport());
         } else if (sub === 'tetokuji') {
@@ -508,7 +508,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
             if (!targetUtcMs) replyQueue.push('形式エラー：huyubot/say/YYYY-MM-DD/HH:MM/文字 の形式で指定してください。');
             else if (msgPart.startsWith('huyubot/')) replyQueue.push('コマンド文字列は予約できません。');
             else if (targetUtcMs <= Date.now()) replyQueue.push('過去の時刻は指定できません。未来の日本時間を指定してください。');
-            else if (targetUtcMs > endTime) replyQueue.push('連続稼働上限（約5時間50分後）より先の時刻は予約できません。');
+            else if (targetUtcMs > endTime) replyQueue.push('連続稼働上限（約5時間55分後）より先の時刻は予約できません。');
             else {
               scheduledPosts.push({ targetMs: targetUtcMs, text: msgPart });
               replyQueue.push('予約を受け付けました！\n予定日時：' + parts.at(2) + ' ' + parts.at(3) + '（JST）');
