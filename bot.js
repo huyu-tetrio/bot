@@ -440,24 +440,26 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
   const extractCommandLine = (postText) => postText.split('\n').map(l => l.trim()).find(l => l === 'huyubot' || l.startsWith('huyubot/')) || null;
 
   const initialPosts = await getPosts();
-  let seenCommandCount = initialPosts.filter(t => extractCommandLine(t) !== null).length;
+  const seenPosts = new Set(initialPosts);
 
   const replyQueue = [];
   let cooldownStartTime = 0;
   const scheduledPosts = [];
-  const adminTrip = process.env.ADMIN_TRIP;
-  const endTime = Date.now() + 4.5 * 60 * 1000;
+  const adminTrip = process.env.ADMIN_TRIP || 'tetrio';
+  const endTime = Date.now() + 355 * 60 * 1000;
 
   while (Date.now() < endTime) {
     const posts = await getPosts();
-    const commandPosts = posts.filter(t => extractCommandLine(t) !== null);
+    const newCommandPosts = posts.filter(t => {
+      if (seenPosts.has(t)) return false;
+      seenPosts.add(t);
+      return extractCommandLine(t) !== null;
+    });
 
-    if (commandPosts.length > seenCommandCount) {
-      const added = commandPosts.length - seenCommandCount;
-      seenCommandCount = commandPosts.length;
+    if (newCommandPosts.length > 0) {
+      for (let i = newCommandPosts.length - 1; i >= 0; i--) {
+        const fullPost = newCommandPosts.at(i) || '';
 
-      for (let i = added - 1; i >= 0; i--) {
-        const fullPost = commandPosts.at(i) || '';
         const cmdLine = extractCommandLine(fullPost);
         if (!cmdLine) continue;
 
