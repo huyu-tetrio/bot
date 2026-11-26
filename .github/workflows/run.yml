@@ -16,4 +16,7 @@ jobs:
         env:
           BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
           BOT_PASS: ${{ secrets.BOT_PASS }}
+          ROOM_URL: ${{ secrets.ROOM_URL }}
+          ROOM_PASS: ${{ secrets.ROOM_PASS }}
+          ADMIN_TRIP: ${{ secrets.ADMIN_TRIP }}
         run: node bot.js
