@@ -445,7 +445,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
   const replyQueue = [];
   let cooldownStartTime = 0;
   const scheduledPosts = [];
-  const adminTrip = process.env.ADMIN_TRIP || 'tetrio';
+  const adminTrip = process.env.ADMIN_TRIP;
   const endTime = Date.now() + 355 * 60 * 1000;
 
   while (Date.now() < endTime) {
