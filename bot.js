@@ -483,7 +483,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
         } else if (sub === 'ver') {
           replyQueue.push('Huyubot Version 1.0.0');
         } else if (sub === 'about') {
-          replyQueue.push('【About Huyubot】\nName: feeder huyubot (Version 0.0.0)\nCreator: huyu_\nチャットBotです！');
+          replyQueue.push('【About Huyubot】\nName: feeder huyubot (Version 1.0.0)\nCreator: huyu_\nたくさんの機能があるチャットBotです！\nもしバグや問題、提案などがあった場合は本人や\nhttps://github.com/huyu-tetrio/bot/issuesからお問い合わせください！');
         } else if (sub === 'time') {
           replyQueue.push(buildTimeReport());
         } else if (sub === 'tetokuji') {
