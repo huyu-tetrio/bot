@@ -352,7 +352,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
     }
   }
 
-  const roomUrl = process.env.ROOM_URL || ('https://' + 'www1.x-feeder.info/huyu_praviteroom/');
+  const roomUrl = process.env.ROOM_URL;
   await page.goto(roomUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(5000);
 
