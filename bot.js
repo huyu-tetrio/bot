@@ -636,7 +636,11 @@ console.log('ログイン処理完了！現在のURL:', page.url());
     });
   };
 
-  const extractCommandLine = (postText) => postText.split('\n').map(l => l.trim()).find(l => l === 'huyubot' || l.startsWith('huyubot/')) || null;
+  const extractCommandLine = (postText) => {
+    if (postText.includes('huyubot/help |')) return null;
+    if (extractSenderName(postText) === 'Huyubot') return null;
+    return postText.split('\n').map(l => l.trim()).find(l => (l === 'huyubot' || l.startsWith('huyubot/')) && !l.includes('|')) || null;
+  };
 
   const processCommand = async (cmdLine, fullPost, sender, isAdmin, endTime) => {
     const parts = cmdLine.replace(/\/+$/, '').split('/');
