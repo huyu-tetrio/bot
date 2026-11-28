@@ -349,7 +349,7 @@ const weatherCodeToShortEmoji = (code) => {
 
 const windDegToJa = (deg) => {
   if (deg === undefined || deg === null) return '';
-  const dirs = Array.of('北', '北東', '東', '南東', '南', '南西', '西', '北西');
+  const dirs = Array.of('北⇑', '北東⇗', '東⇒', '南東⇘', '南⇓', '南西⇙', '西⇐', '北西⇖');
   return dirs.at(Math.round(deg / 45) % 8);
 };
 
