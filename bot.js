@@ -187,20 +187,18 @@ const TETOKUJI_LIST = [
 
 // ここでわける（第2弾終了）
 // ==========================================
-// 3. 絵文字データ（全700種類を自動生成）
+// 3. 絵文字データ（変な記号を除外＋肌色パーツ含む約760種）
 // ==========================================
 
 const EMOJI_POOL = (() => {
-  const ranges = Array.of(
-    Array.of(0x1F600, 0x1F64F),
-    Array.of(0x1F300, 0x1F56B)
-  );
   const list = [];
-  for (const pair of ranges) {
-    const start = pair.at(0);
-    const end = pair.at(1);
-    for (let cp = start; cp <= end; cp++) {
-      list.push(String.fromCodePoint(cp));
+  const isPictographic = /\p{Extended_Pictographic}/u;
+
+  for (let cp = 0x1F300; cp <= 0x1F9FF; cp++) {
+    const ch = String.fromCodePoint(cp);
+    const isSkinTone = (cp >= 0x1F3FB && cp <= 0x1F3FF);
+    if (isPictographic.test(ch) || isSkinTone) {
+      list.push(ch);
     }
   }
   return list;
@@ -223,7 +221,15 @@ const formatJstDateTime = (jstDate) => {
   return yyyy + '/' + mm + '/' + dd + ' ' + hh + ':' + min + ':' + ss;
 };
 
-// 次の定時交代時刻（日本時間 05:25, 11:25, 17:25, 23:25）のUTCタイムスタンプを自動計算
+const formatDurationHms = (ms) => {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSec % 60).padStart(2, '0');
+  return h + ':' + m + ':' + s;
+};
+
+// 次の定時交代時刻（日本時間 00:04, 06:04, 12:04, 18:04）のUTCタイムスタンプを自動計算
 const getNextShiftEndUtcMs = () => {
   const nowUtc = Date.now();
   const jst = new Date(nowUtc + 9 * 60 * 60 * 1000);
@@ -231,17 +237,17 @@ const getNextShiftEndUtcMs = () => {
   const m = jst.getUTCMonth();
   const d = jst.getUTCDate();
 
-  const shiftHours = Array.of(5, 11, 17, 23);
+  const shiftHours = Array.of(0, 6, 12, 18);
   for (const h of shiftHours) {
-    const candidateUtc = Date.UTC(y, m, d, h - 9, 25, 0);
+    const candidateUtc = Date.UTC(y, m, d, h - 9, 4, 0);
     if (candidateUtc > nowUtc + 2 * 60 * 1000) {
       return candidateUtc;
     }
   }
-  return Date.UTC(y, m, d + 1, 5 - 9, 25, 0);
+  return Date.UTC(y, m, d + 1, 0 - 9, 4, 0);
 };
 
-const buildTimeReport = () => {
+const buildTimeReport = (endTimeUtcMs) => {
   const jst = getJstNow();
   const yyyy = jst.getUTCFullYear();
   const mm = String(jst.getUTCMonth() + 1).padStart(2, '0');
@@ -253,18 +259,24 @@ const buildTimeReport = () => {
   const ss = String(jst.getUTCSeconds()).padStart(2, '0');
 
   const nowMs = jst.getTime();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+
   const startOfDay = Date.UTC(yyyy, jst.getUTCMonth(), jst.getUTCDate(), 0, 0, 0);
   const endOfDay = Date.UTC(yyyy, jst.getUTCMonth(), jst.getUTCDate() + 1, 0, 0, 0);
   const dayPct = ((nowMs - startOfDay) / (endOfDay - startOfDay)) * 100;
+  const remainTodayStr = formatDurationHms(endOfDay - nowMs);
 
   const startOfMonth = Date.UTC(yyyy, jst.getUTCMonth(), 1, 0, 0, 0);
   const endOfMonth = Date.UTC(yyyy, jst.getUTCMonth() + 1, 1, 0, 0, 0);
   const monthPct = ((nowMs - startOfMonth) / (endOfMonth - startOfMonth)) * 100;
+  const remainMonthDays = Math.ceil((endOfMonth - nowMs) / oneDayMs);
 
   const startOfYear = Date.UTC(yyyy, 0, 1, 0, 0, 0);
   const endOfYear = Date.UTC(yyyy + 1, 0, 1, 0, 0, 0);
   const yearPct = ((nowMs - startOfYear) / (endOfYear - startOfYear)) * 100;
-  const remainingDays = Math.floor((endOfYear - nowMs) / (24 * 60 * 60 * 1000));
+  const remainYearDays = Math.ceil((endOfYear - nowMs) / oneDayMs);
+
+  const remainShiftStr = endTimeUtcMs ? formatDurationHms(endTimeUtcMs - Date.now()) : '--:--:--';
 
   const makeBar = (pct) => {
     const filled = Math.min(10, Math.max(0, Math.floor(pct / 10)));
@@ -272,11 +284,14 @@ const buildTimeReport = () => {
   };
 
   return [
-    "現在は''" + yyyy + "/" + mm + "/" + dd + "''（" + w + "）　''" + hh + ":" + min + ":" + ss + "''",
-    "今年残りの日数はあと''" + remainingDays + "日''",
-    "今日 " + dayPct.toFixed(2) + "% " + makeBar(dayPct),
-    "今月 " + monthPct.toFixed(2) + "% " + makeBar(monthPct),
-    "今年 " + yearPct.toFixed(2) + "% " + makeBar(yearPct)
+    "🕒 現在は''" + yyyy + "/" + mm + "/" + dd + "''（" + w + "）　''" + hh + ":" + min + ":" + ss + "''",
+    "⏳ 今日の残り時間：''" + remainTodayStr + "''",
+    "📅 今月残りの日数はあと''" + remainMonthDays + "日''",
+    "🎍 今年残りの日数はあと''" + remainYearDays + "日''",
+    "🤖 次のBot交代まで：''" + remainShiftStr + "''",
+    "☀️ 今日 " + dayPct.toFixed(2) + "% " + makeBar(dayPct),
+    "🗓️ 今月 " + monthPct.toFixed(2) + "% " + makeBar(monthPct),
+    "🌏 今年 " + yearPct.toFixed(2) + "% " + makeBar(yearPct)
   ].join('\n');
 };
 
@@ -297,16 +312,45 @@ const drawTetokuji = () => {
 // 5. 天気API処理 ＆ アカウントログイン処理
 // ==========================================
 
-const weatherCodeToJa = (code) => {
-  if (code === 0) return '快晴';
-  if (code === 1 || code === 2) return '晴れ時々曇り';
-  if (code === 3) return '曇り';
-  if (code === 45 || code === 48) return '霧';
-  if (code >= 51 && code <= 57) return '霧雨';
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return '雨';
-  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return '雪';
-  if (code >= 95 && code <= 99) return '雷雨';
-  return '不明';
+const resolveLocationKey = (rawInput) => {
+  if (!rawInput) return null;
+  if (WEATHER_LOCATIONS[rawInput]) return rawInput;
+  if (rawInput === '北海道') return '北海道';
+  const suffixes = Array.of('都', '府', '県', '市', '区', '町');
+  for (const s of suffixes) {
+    if (WEATHER_LOCATIONS[rawInput + s]) return rawInput + s;
+  }
+  return null;
+};
+
+const weatherCodeToEmojiJa = (code) => {
+  if (code === 0) return '☀️ 快晴';
+  if (code === 1 || code === 2) return '🌤️ 晴れ時々曇り';
+  if (code === 3) return '☁️ 曇り';
+  if (code === 45 || code === 48) return '🌫️ 霧';
+  if (code >= 51 && code <= 57) return '🌦️ 霧雨';
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return '☔ 雨';
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return '❄️ 雪';
+  if (code >= 95 && code <= 99) return '⛈️ 雷雨';
+  return '❓ 不明';
+};
+
+const weatherCodeToShortEmoji = (code) => {
+  if (code === 0) return '☀️';
+  if (code === 1 || code === 2) return '🌤️';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return '☔';
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return '❄️';
+  if (code >= 95 && code <= 99) return '⛈️';
+  return '❓';
+};
+
+const windDegToJa = (deg) => {
+  if (deg === undefined || deg === null) return '';
+  const dirs = Array.of('北', '北東', '東', '南東', '南', '南西', '西', '北西');
+  return dirs.at(Math.round(deg / 45) % 8);
 };
 
 const fetchWeatherText = async (locKey) => {
@@ -315,29 +359,136 @@ const fetchWeatherText = async (locKey) => {
 
   try {
     const apiBase = 'https://' + 'api' + '.open-meteo' + '.com/v1/forecast';
-    const url = apiBase + '?latitude=' + loc.lat + '&longitude=' + loc.lon + '&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=2';
+    const url = apiBase
+      + '?latitude=' + loc.lat
+      + '&longitude=' + loc.lon
+      + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m'
+      + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,uv_index_max'
+      + '&timezone=Asia%2FTokyo&forecast_days=2';
     const res = await fetch(url);
     if (!res.ok) throw new Error('APIエラー');
     const data = await res.json();
 
-    const curTemp = (data.current && data.current.temperature_2m !== undefined) ? data.current.temperature_2m : '--';
-    const curWeather = weatherCodeToJa(data.current ? data.current.weather_code : -1);
-    const todayMax = (data.daily && data.daily.temperature_2m_max) ? data.daily.temperature_2m_max.at(0) : '--';
-    const todayMin = (data.daily && data.daily.temperature_2m_min) ? data.daily.temperature_2m_min.at(0) : '--';
-    const todayPop = (data.daily && data.daily.precipitation_probability_max) ? data.daily.precipitation_probability_max.at(0) : '--';
-    const tomorrowWeather = weatherCodeToJa((data.daily && data.daily.weather_code) ? data.daily.weather_code.at(1) : -1);
-    const tomorrowMax = (data.daily && data.daily.temperature_2m_max) ? data.daily.temperature_2m_max.at(1) : '--';
-    const tomorrowMin = (data.daily && data.daily.temperature_2m_min) ? data.daily.temperature_2m_min.at(1) : '--';
+    const c = data.current || {};
+    const d = data.daily || {};
+    const jst = getJstNow();
+    const nowTimeStr = String(jst.getUTCMonth() + 1).padStart(2, '0') + '/' + String(jst.getUTCDate()).padStart(2, '0')
+      + ' ' + String(jst.getUTCHours()).padStart(2, '0') + ':' + String(jst.getUTCMinutes()).padStart(2, '0');
+
+    const curWeather = weatherCodeToEmojiJa(c.weather_code ?? -1);
+    const curTemp = c.temperature_2m ?? '--';
+    const appTemp = c.apparent_temperature ?? '--';
+    const hum = c.relative_humidity_2m ?? '--';
+    const windDir = windDegToJa(c.wind_direction_10m);
+    const windSpd = c.wind_speed_10m !== undefined ? (c.wind_speed_10m / 3.6).toFixed(1) : '--';
+    const press = c.pressure_msl ? Math.round(c.pressure_msl) : '--';
+
+    const todayMax = d.temperature_2m_max ? d.temperature_2m_max.at(0) : '--';
+    const todayMin = d.temperature_2m_min ? d.temperature_2m_min.at(0) : '--';
+    const todayPop = d.precipitation_probability_max ? d.precipitation_probability_max.at(0) : '--';
+    const todayRain = d.precipitation_sum ? d.precipitation_sum.at(0) : '--';
+    const sunrise = d.sunrise && d.sunrise.at(0) ? d.sunrise.at(0).slice(-5) : '--:--';
+    const sunset = d.sunset && d.sunset.at(0) ? d.sunset.at(0).slice(-5) : '--:--';
+    const uvMax = d.uv_index_max ? d.uv_index_max.at(0) : '--';
+
+    const tomWeather = weatherCodeToEmojiJa(d.weather_code ? d.weather_code.at(1) : -1);
+    const tomMax = d.temperature_2m_max ? d.temperature_2m_max.at(1) : '--';
+    const tomMin = d.temperature_2m_min ? d.temperature_2m_min.at(1) : '--';
+    const tomPop = d.precipitation_probability_max ? d.precipitation_probability_max.at(1) : '--';
 
     return [
-      '【' + loc.label + 'の天気】',
-      '現在：' + curWeather + '（' + curTemp + '℃）',
-      '今日：最高 ' + todayMax + '℃ / 最低 ' + todayMin + '℃（降水確率 ' + todayPop + '%）',
-      '明日：' + tomorrowWeather + '（最高 ' + tomorrowMax + '℃ / 最低 ' + tomorrowMin + '℃）',
+      '【📍' + loc.label + 'の天気 | ' + nowTimeStr + '現在】',
+      '現在：' + curWeather + ' ' + curTemp + '℃（体感 ' + appTemp + '℃ / 💧 ' + hum + '%）',
+      '風・圧：🍃 ' + windDir + ' ' + windSpd + 'm/s / 気圧 ' + press + 'hPa',
+      '今日：最高 ' + todayMax + '℃ / 最低 ' + todayMin + '℃（☔ ' + todayPop + '% / 降水量 ' + todayRain + 'mm）',
+      '日照：🌅 ' + sunrise + ' / 🌇 ' + sunset + ' / ☀️ UV ' + uvMax,
+      '明日：' + tomWeather + '（最高 ' + tomMax + '℃ / 最低 ' + tomMin + '℃ / ☔ ' + tomPop + '%）',
       'Weather data by Open-Meteo.com'
     ].join('\n');
   } catch (e) {
-    return '【' + loc.label + 'の天気】\n天気データの取得に失敗しました。少し時間をおいて再度お試しください。';
+    return '【📍' + loc.label + 'の天気】\n天気データの取得に失敗しました。少し時間をおいて再度お試しください。';
+  }
+};
+
+const fetchTimelineWeatherText = async (locKey) => {
+  const loc = WEATHER_LOCATIONS[locKey];
+  if (!loc) return null;
+
+  try {
+    const apiBase = 'https://' + 'api' + '.open-meteo' + '.com/v1/forecast';
+    const url = apiBase
+      + '?latitude=' + loc.lat
+      + '&longitude=' + loc.lon
+      + '&current=temperature_2m,weather_code'
+      + '&minutely_15=temperature_2m,weather_code,precipitation'
+      + '&hourly=temperature_2m,weather_code,precipitation_probability'
+      + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+      + '&past_hours=3&forecast_hours=13&forecast_minutely_15=4&forecast_days=7&timezone=Asia%2FTokyo';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('APIエラー');
+    const data = await res.json();
+
+    const h = data.hourly || {};
+    const m15 = data.minutely_15 || {};
+    const d = data.daily || {};
+    const c = data.current || {};
+
+    // 1〜3時間前（hourlyの0,1,2番目）
+    const pastItems = Array.of(0, 1, 2).map(idx => {
+      const hr = 3 - idx;
+      const ico = weatherCodeToShortEmoji(h.weather_code ? h.weather_code.at(idx) : -1);
+      const tmp = h.temperature_2m ? h.temperature_2m.at(idx) : '--';
+      return hr + 'h前:' + ico + tmp + '℃';
+    });
+
+    // 15分・30分・45分後（minutely_15の1,2,3番目）
+    const minItems = Array.of(1, 2, 3).map(idx => {
+      const mins = idx * 15;
+      const ico = weatherCodeToShortEmoji(m15.weather_code ? m15.weather_code.at(idx) : -1);
+      const tmp = m15.temperature_2m ? m15.temperature_2m.at(idx) : '--';
+      const rain = m15.precipitation ? m15.precipitation.at(idx) : 0;
+      return mins + '分後:' + ico + tmp + '℃(' + rain + 'mm)';
+    });
+
+    // 1〜12時間後（hourlyの4〜15番目）
+    const futureH1 = [];
+    const futureH2 = [];
+    for (let step = 1; step <= 12; step++) {
+      const idx = 3 + step;
+      const ico = weatherCodeToShortEmoji(h.weather_code ? h.weather_code.at(idx) : -1);
+      const tmp = h.temperature_2m ? h.temperature_2m.at(idx) : '--';
+      const pop = h.precipitation_probability ? h.precipitation_probability.at(idx) : '--';
+      const entry = step + 'h後:' + ico + tmp + '℃(' + pop + '%)';
+      if (step <= 6) futureH1.push(entry);
+      else futureH2.push(entry);
+    }
+
+    // 1〜7日間（dailyの0〜6番目）
+    const dayItems = [];
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+      const dateLabel = d.time && d.time.at(dayIdx) ? d.time.at(dayIdx).slice(5).replace('-', '/') : (dayIdx + 1) + '日';
+      const ico = weatherCodeToShortEmoji(d.weather_code ? d.weather_code.at(dayIdx) : -1);
+      const maxT = d.temperature_2m_max ? d.temperature_2m_max.at(dayIdx) : '--';
+      const minT = d.temperature_2m_min ? d.temperature_2m_min.at(dayIdx) : '--';
+      const pop = d.precipitation_probability_max ? d.precipitation_probability_max.at(dayIdx) : '--';
+      dayItems.push(dateLabel + ':' + ico + maxT + '/' + minT + '℃(' + pop + '%)');
+    }
+
+    const curIco = weatherCodeToEmojiJa(c.weather_code ?? -1);
+    const curTmp = c.temperature_2m ?? '--';
+
+    return [
+      '【⏱️' + loc.label + ' 時系列天気】',
+      '過去：' + pastItems.join(' / '),
+      '現在：' + curIco + ' ' + curTmp + '℃',
+      '直近：' + minItems.join(' / '),
+      '1〜6h後：' + futureH1.join(' '),
+      '7〜12h後：' + futureH2.join(' '),
+      '週間(7日)：' + dayItems.join(' / '),
+      'Weather data by Open-Meteo.com'
+    ].join('\n');
+  } catch (e) {
+    return '【⏱️' + loc.label + ' 時系列天気】\n時系列データの取得に失敗しました。少し時間をおいて再度お試しください。';
   }
 };
 
@@ -386,13 +537,12 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
       const accForm = accPassInput.locator('xpath=ancestor::form');
       await accForm.locator('input[type="submit"], button').first().click();
       await page.waitForTimeout(5000);
-      console.log('ログイン処理完了！現在のURL:', page.url());
-    }
-  }
-
+console.log('ログイン処理完了！現在のURL:', page.url());
+}
+}
 // ここでわける（第5弾終了）
 // ==========================================
-// 6. 部屋への入室・送信準備・入室挨拶
+// 6. 部屋への入室・ステータス設定・送信準備・入室挨拶
 // ==========================================
 
   const roomUrl = process.env.ROOM_URL;
@@ -423,6 +573,18 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
     await page.waitForTimeout(500);
   }
 
+  // 右側オンライン欄の「今なにしてる？」を huyubot/help | 2.1.0 に自動設定
+  const statusInput = page.getByPlaceholder('今なにしてる？');
+  if (await statusInput.isVisible().catch(() => false)) {
+    await statusInput.fill('huyubot/help | 2.1.0');
+    await page.waitForTimeout(300);
+    const statusSetBtn = page.locator('button:has-text("設定"), input[value="設定"]').first();
+    if (await statusSetBtn.isVisible().catch(() => false)) {
+      await statusSetBtn.click({ force: true });
+      await page.waitForTimeout(500);
+    }
+  }
+
   const multiInput = page.locator('#post_form_multi');
   if (!(await multiInput.isVisible())) {
     await page.locator('#input_type').click({ force: true });
@@ -436,20 +598,10 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
       await page.waitForTimeout(300);
     }
 
-    await multiInput.fill('', { force: true });
-
-    const lines = text.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const currentLine = lines.at(i) || '';
-      if (currentLine.length > 0) {
-        await multiInput.type(currentLine);
-      }
-      if (i < lines.length - 1) {
-        await multiInput.press('Enter');
-        await page.waitForTimeout(150);
-      }
-    }
-
+    await multiInput.click({ force: true });
+    await multiInput.fill(text, { force: true });
+    await multiInput.press('Space');
+    await multiInput.press('Backspace');
     await page.waitForTimeout(300);
     await page.locator('#post_btn').click({ force: true });
   };
@@ -465,11 +617,11 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
 
   await sendChat('こんにちは、私はfeeder huyubotです、コマンド一覧を見たい場合は「huyubot/help」と打ってください。\nHi! im feeder huyubot. To view the list of commands, please type "huyubot/help".');
   await page.waitForTimeout(2000);
-  console.log('Huyubot Version 2.0.0 監視モード開始！');
+  console.log('Huyubot Version 2.1.0 監視モード開始！');
 
 // ここでわける（第6弾終了）
 // ==========================================
-// 7. 常駐監視ループ（全コマンド・個チャ対応・時間制交代）
+// 7. 常駐監視ループ（全コマンド・個チャ定期パトロール・時間制交代）
 // ==========================================
 
   const getPosts = async () => {
@@ -486,7 +638,6 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
 
   const extractCommandLine = (postText) => postText.split('\n').map(l => l.trim()).find(l => l === 'huyubot' || l.startsWith('huyubot/')) || null;
 
-  // コマンド共通処理関数（公開チャット・個チャの両方から使用）
   const processCommand = async (cmdLine, fullPost, sender, isAdmin, endTime) => {
     const parts = cmdLine.replace(/\/+$/, '').split('/');
     const sub = parts.at(1) || '';
@@ -498,26 +649,29 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
       return '【Huyubot コマンド一覧】\n・huyubot/help : コマンド一覧\n・huyubot/test\n・huyubot/weather\n・huyubot/tetokuji\n・huyubot/emoji　（/1~100）\n・huyubot/time\n・huyubot/update\n・huyubot/about\n・huyubot/ver\n・huyubot/say\n・huyubot/bye（管理者専用）';
     }
     if (sub === 'ver') {
-      return 'Huyubot Version 2.0.0';
+      return 'Huyubot Version 2.1.0';
     }
     if (sub === 'update') {
       const verArg = parts.at(2) || '';
       if (!verArg) {
-        return '過去のアップデートを確認するにはhuyubot/update/（バージョン)と打ってください\n1.0.0 | 2026-11-27\n2.0.0 | 2026-11-28';
+        return '過去のアップデートを確認するにはhuyubot/update/（バージョン)と打ってください\n1.0.0 | 2026-11-27\n2.0.0 | 2026-11-28\n2.1.0 | 2026-11-29';
       }
       if (verArg === '1.0.0') {
-        return '【Update 1.0.0 | 2026-11-27】\n・Huyubot 初代リリース。\n・help / test / weather / tetokuji / emoji / time / say / about / ver / bye を実装';
+        return '【Update 1.0.0 | 2026-11-27】\n・Huyubot 初代リリース\n・help / test / weather / tetokuji / emoji / time / say / about / ver / bye を実装';
       }
       if (verArg === '2.0.0' || verArg === '1.1.0') {
-        return '【Update 2.0.0 | 2026-11-28】\n・クールタイムを3秒に短縮\n・時間制（5分前）の自動交代＆退室挨拶を実装\n・個チャ（個人メッセージ）でのコマンド応答に対応\n・絵文字を700種類＆最大100個指定に拡大\n・天気API修正＆クレジット表記追加、updateコマンド実装';
+        return '【Update 2.0.0 | 2026-11-28】\n・クールタイムを3秒に短縮\n・時間制の自動交代＆退室挨拶を実装\n・個チャ（個人メッセージ）でのコマンド応答に対応\n・絵文字を700種類＆最大100個指定に拡大\n・天気API修正＆クレジット表記追加、updateコマンド実装';
+      }
+      if (verArg === '2.1.0') {
+        return '【Update 2.1.0 | 2026-11-29】\n・絵文字プールから未定義記号を除外（肌色パーツ残し）\n・個チャの受信トレイ定期確認修正\n・huyubot/time に残り時間・残り日数・Bot交代カウントダウンと絵文字を追加\n・天気絵文字化、都道府県省略入力、weather/地域/time 時系列予報を実装\n・入室時のオンラインステータス自動設定を追加';
       }
       return '指定されたバージョン「' + verArg + '」の履歴は見つかりませんでした。\n「huyubot/update」で一覧を確認してください。';
     }
     if (sub === 'about') {
-      return '【About Huyubot】\nName: feeder huyubot (Version 2.0.0)\nCreator: huyu_\nたくさんの機能があるチャットBotです！\nもしバグや問題、提案などがあった場合は本人や\nhttps://github.com！\nWeather data by Open-Meteo.com';
+      return '【About Huyubot】\nName: feeder huyubot (Version 2.1.0)\nCreator: huyu_\nたくさんの機能があるチャットBotです！\nもしバグや問題、提案などがあった場合は本人や\nhttps://github.com！\nWeather data by Open-Meteo.com';
     }
     if (sub === 'time') {
-      return buildTimeReport();
+      return buildTimeReport(endTime);
     }
     if (sub === 'tetokuji') {
       return '【' + sender + ' さんのテトくじ結果】\n' + drawTetokuji();
@@ -536,44 +690,71 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
       return picked.join(' ');
     }
     if (sub === 'weather') {
-      const arg1 = parts.at(2) || '';
-      const arg2 = parts.at(3) || '';
-      const targetLoc = arg2 || arg1;
-      if (!arg1) return '【天気予報：地方を選択してください】\n' + Object.keys(WEATHER_REGIONS).join('・') + '\n例：huyubot/weather/関東';
-      if (WEATHER_REGIONS[arg1] && !arg2) return '【' + arg1 + '地方のエリア一覧】\n' + WEATHER_REGIONS[arg1].join('・') + '\n例：huyubot/weather/' + WEATHER_REGIONS[arg1].at(0);
-      if (PREF_CAPITALS[targetLoc] && !arg2) return '※' + targetLoc + 'の県庁所在地（' + PREF_CAPITALS[targetLoc] + '）の天気を表示します\n' + (await fetchWeatherText(targetLoc));
-      if (WEATHER_LOCATIONS[targetLoc]) return await fetchWeatherText(targetLoc);
-      return '指定された地域「' + targetLoc + '」は見つかりませんでした。\n「huyubot/weather」で一覧を確認してください。';
+      const isTimeMode = parts.at(-1) === 'time';
+      const locParts = isTimeMode ? parts.slice(2, -1) : parts.slice(2);
+      const arg1 = locParts.at(0) || '';
+      const arg2 = locParts.at(1) || '';
+      const rawLoc = arg2 || arg1;
+
+      if (!arg1) {
+        return '【天気予報：地方を選択してください】\n' + Object.keys(WEATHER_REGIONS).join('・') + '\n例：huyubot/weather/東京 または huyubot/weather/東京/time';
+      }
+      if (WEATHER_REGIONS[arg1] && !arg2 && !isTimeMode) {
+        return '【' + arg1 + '地方のエリア一覧】\n' + WEATHER_REGIONS[arg1].join('・') + '\n例：huyubot/weather/' + WEATHER_REGIONS[arg1].at(0);
+      }
+
+      const resolvedKey = resolveLocationKey(rawLoc);
+      if (resolvedKey) {
+        if (isTimeMode) {
+          return await fetchTimelineWeatherText(resolvedKey);
+        }
+        if (PREF_CAPITALS[resolvedKey] && !arg2) {
+          return '※' + resolvedKey + 'の県庁所在地（' + PREF_CAPITALS[resolvedKey] + '）の天気を表示します\n' + (await fetchWeatherText(resolvedKey));
+        }
+        return await fetchWeatherText(resolvedKey);
+      }
+      return '指定された地域「' + rawLoc + '」は見つかりませんでした。\n「huyubot/weather」で一覧を確認してください。';
     }
     return null;
   };
 
-  // 個チャ（受信トレイ）チェック＆返信関数
-  const checkPrivateMessages = async (adminTrip, endTime) => {
-    const noticeBar = page.locator('text=メッセージが届きました').first();
-    if (!(await noticeBar.isVisible())) return;
+  let pmCheckCounter = 0;
 
-    console.log('個チャ通知を検知！受信トレイを開きます...');
-    await noticeBar.click({ force: true });
+  const checkPrivateMessages = async (adminTrip, endTime) => {
+    pmCheckCounter++;
+    const noticeBar = page.locator('text=メッセージが届きました').first();
+    const hasNotice = await noticeBar.isVisible().catch(() => false);
+
+    if (!hasNotice && pmCheckCounter % 8 !== 0) return;
+
+    if (hasNotice) {
+      console.log('個チャ通知バーを検知！受信トレイを開きます...');
+      await noticeBar.click({ force: true }).catch(() => {});
+    } else {
+      const inboxBtn = page.locator('button:has-text("受信トレイ"), a:has-text("受信トレイ"), input[value="受信トレイ"]').first();
+      if (!(await inboxBtn.isVisible().catch(() => false))) return;
+      await inboxBtn.click({ force: true }).catch(() => {});
+    }
     await page.waitForTimeout(2000);
 
     try {
       const newBadge = page.locator('text=NEW').first();
-      if (await newBadge.isVisible()) {
-        const row = newBadge.locator('xpath=ancestor::tr | ancestor::div[contains(@class,"item") or contains(@class,"msg") or self::div][1]');
+      if (await newBadge.isVisible().catch(() => false)) {
+        console.log('未読(NEW)メッセージを発見！内容を読み取ります...');
+        const row = newBadge.locator('xpath=ancestor::tr | ancestor::div').last();
         const rowText = (await row.innerText().catch(() => '')) || '';
         const cmdLine = extractCommandLine(rowText);
         const sender = extractSenderName(rowText);
-        const isAdmin = rowText.includes(adminTrip);
+        const isAdmin = adminTrip ? rowText.includes(adminTrip) : false;
 
         if (cmdLine) {
           const replyText = await processCommand(cmdLine, rowText, sender, isAdmin, endTime);
           const replyBtn = page.locator('button:has-text("返信"), a:has-text("返信"), input[value="返信"]').first();
-          if (replyText && (await replyBtn.isVisible())) {
+          if (replyText && (await replyBtn.isVisible().catch(() => false))) {
             await replyBtn.click({ force: true });
             await page.waitForTimeout(1500);
             const pmInput = page.locator('textarea:visible').last();
-            if (await pmInput.isVisible()) {
+            if (await pmInput.isVisible().catch(() => false)) {
               await pmInput.fill(replyText);
               await page.waitForTimeout(300);
               const sendPmBtn = page.locator('button:has-text("送信"), input[value="送信"]').last();
@@ -584,7 +765,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
           }
         } else {
           const ignoreBtn = page.locator('button:has-text("無視"), a:has-text("無視"), input[value="無視"]').first();
-          if (await ignoreBtn.isVisible()) {
+          if (await ignoreBtn.isVisible().catch(() => false)) {
             await ignoreBtn.click({ force: true });
             await page.waitForTimeout(1000);
           }
@@ -595,12 +776,13 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
     }
 
     const closeBtn = page.locator('button:has-text("閉じる"), input[value="閉じる"]').last();
-    if (await closeBtn.isVisible()) {
+    if (await closeBtn.isVisible().catch(() => false)) {
       await closeBtn.click({ force: true });
       await page.waitForTimeout(1000);
     }
   };
 
+// ここでわける（第7弾半分終了）
   const initialPosts = await getPosts();
   const seenPosts = new Set(initialPosts);
   const replyQueue = [];
@@ -649,7 +831,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
             if (!targetUtcMs) replyQueue.push('形式エラー：huyubot/say/YYYY-MM-DD/HH:MM/文字 の形式で指定してください。');
             else if (msgPart.startsWith('huyubot/')) replyQueue.push('コマンド文字列は予約できません。');
             else if (targetUtcMs <= Date.now()) replyQueue.push('過去の時刻は指定できません。未来の日本時間を指定してください。');
-            else if (targetUtcMs > endTime) replyQueue.push('次の自動交代時刻（5分前）より先の時刻は予約できません。');
+            else if (targetUtcMs > endTime) replyQueue.push('次の自動交代時刻（1分前）より先の時刻は予約できません。');
             else {
               scheduledPosts.push({ targetMs: targetUtcMs, text: msgPart });
               replyQueue.push('予約を受け付けました！\n予定日時：' + parts.at(2) + ' ' + parts.at(3) + '（JST）');
@@ -676,7 +858,6 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
       }
     }
 
-    // クールタイム3秒（3000ms）でサクサク返信
     if (replyQueue.length > 0 && Date.now() - cooldownStartTime >= 3000) {
       await sendChat(replyQueue.shift());
       cooldownStartTime = replyQueue.length > 0 ? Date.now() : 0;
@@ -685,8 +866,8 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
     await page.waitForTimeout(2000);
   }
 
-  // 時間制交代（5分前）の退室挨拶
-  await sendChat('定期交代時間になったため一度退室します。またすぐ戻ります！');
+  // 時間制交代（1分前：00:04, 06:04, 12:04, 18:04）の退室挨拶
+  await sendChat('定期交代時間になったため一度退室します。またすぐ戻ります!');
   await page.waitForTimeout(2000);
   await browser.close();
 })();
