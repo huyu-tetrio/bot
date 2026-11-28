@@ -1,8 +1,6 @@
 name: main
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '30 2,8,14,20 * * *'
 
 jobs:
   run-bot:
