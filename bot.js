@@ -410,7 +410,7 @@ const parseScheduleJstMs = (dateStr, timeStr) => {
 
   const nameInput = page.getByPlaceholder('名前を入力');
   if (await nameInput.isVisible()) {
-    await nameInput.fill('huyubot test');
+    await nameInput.fill('Huyubot');
     await nameInput.press('Enter');
     await page.waitForTimeout(8000);
   }
