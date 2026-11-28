@@ -191,10 +191,10 @@ const TETOKUJI_LIST = [
 // ==========================================
 
 const EMOJI_POOL = (() => {
-  const ranges = [
-    , // 表情・感情（80個）
-    , // 動物・自然・食べ物・アイテム・乗り物（620個）
-  ];
+  const ranges = Array.of(
+    Array.of(0x1F600, 0x1F64F),
+    Array.of(0x1F300, 0x1F56B)
+  );
   const list = [];
   for (const pair of ranges) {
     const start = pair.at(0);
